@@ -1,13 +1,15 @@
 .rayContainer {
-  // Theme-specific colors
-  --ray-color-primary: color-mix(in srgb, var(--primary-color), transparent 30%);
-  --ray-color-secondary: color-mix(in srgb, var(--secondary-color), transparent 30%);
-  --ray-color-accent: color-mix(in srgb, var(--accent-color), transparent 30%);
+  // Theme-specific colors - Enhanced purple
+  --ray-color-primary: color-mix(in srgb, var(--primary-color), transparent 15%);
+  --ray-color-secondary: color-mix(in srgb, var(--secondary-color), transparent 20%);
+  --ray-color-accent: color-mix(in srgb, var(--accent-color), transparent 15%);
+  --ray-color-tertiary: color-mix(in srgb, var(--tertiary-color), transparent 20%);
 
-  // Theme-specific gradients
-  --ray-gradient-primary: radial-gradient(var(--ray-color-primary) 0%, transparent 70%);
-  --ray-gradient-secondary: radial-gradient(var(--ray-color-secondary) 0%, transparent 70%);
-  --ray-gradient-accent: radial-gradient(var(--ray-color-accent) 0%, transparent 70%);
+  // Theme-specific gradients - Stronger purple presence
+  --ray-gradient-primary: radial-gradient(var(--ray-color-primary) 0%, transparent 65%);
+  --ray-gradient-secondary: radial-gradient(var(--ray-color-secondary) 0%, transparent 65%);
+  --ray-gradient-accent: radial-gradient(var(--ray-color-accent) 0%, transparent 65%);
+  --ray-gradient-tertiary: radial-gradient(var(--ray-color-tertiary) 0%, transparent 65%);
 
   position: fixed;
   inset: 0;
@@ -41,37 +43,37 @@
 }
 
 .ray1 {
-  width: 600px;
-  height: 800px;
+  width: 700px;
+  height: 900px;
   background: var(--ray-gradient-primary);
   transform: rotate(65deg);
   top: -500px;
   left: -100px;
-  filter: blur(80px);
-  opacity: 0.6;
+  filter: blur(90px);
+  opacity: 0.75;
   animation: float1 15s infinite ease-in-out;
 }
 
 .ray2 {
-  width: 400px;
-  height: 600px;
+  width: 500px;
+  height: 700px;
   background: var(--ray-gradient-secondary);
   transform: rotate(-30deg);
   top: -300px;
   left: 200px;
-  filter: blur(60px);
-  opacity: 0.6;
+  filter: blur(70px);
+  opacity: 0.7;
   animation: float2 18s infinite ease-in-out;
 }
 
 .ray3 {
-  width: 500px;
-  height: 400px;
+  width: 550px;
+  height: 500px;
   background: var(--ray-gradient-accent);
   top: -320px;
   left: 500px;
-  filter: blur(65px);
-  opacity: 0.5;
+  filter: blur(75px);
+  opacity: 0.65;
   animation: float3 20s infinite ease-in-out;
 }
 
@@ -87,14 +89,14 @@
 }
 
 .ray5 {
-  width: 350px;
-  height: 500px;
+  width: 450px;
+  height: 600px;
   background: var(--ray-gradient-primary);
   transform: rotate(-45deg);
   top: -250px;
   left: 1000px;
-  filter: blur(45px);
-  opacity: 0.6;
+  filter: blur(65px);
+  opacity: 0.7;
   animation: float5 16s infinite ease-in-out;
 }
 

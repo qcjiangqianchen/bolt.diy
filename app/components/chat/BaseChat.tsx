@@ -16,9 +16,9 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import styles from './BaseChat.module.scss';
 import { ImportButtons } from '~/components/chat/chatExportAndImport/ImportButtons';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
+import { RecentTasks } from '~/components/chat/RecentTasks';
 import GitCloneButton from './GitCloneButton';
 import type { ProviderInfo } from '~/types/model';
-import StarterTemplates from './StarterTemplates';
 import type { ActionAlert, SupabaseAlert, DeployAlert, LlmErrorAlertType } from '~/types/actions';
 import DeployChatAlert from '~/components/deploy/DeployAlert';
 import ChatAlert from './ChatAlert';
@@ -34,7 +34,7 @@ import type { DesignScheme } from '~/types/design-scheme';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import LlmErrorAlert from './LLMApiAlert';
 
-const TEXTAREA_MIN_HEIGHT = 76;
+const TEXTAREA_MIN_HEIGHT = 114;
 
 interface BaseChatProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement> | undefined;
@@ -133,7 +133,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     },
     ref,
   ) => {
-    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const TEXTAREA_MAX_HEIGHT = chatStarted ? 600 : 300;
     const [apiKeys, setApiKeys] = useState<Record<string, string>>(getApiKeysFromCookies());
     const [modelList, setModelList] = useState<ModelInfo[]>([]);
     const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(false);
@@ -144,6 +144,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const expoUrl = useStore(expoUrlAtom);
     const [qrModalOpen, setQrModalOpen] = useState(false);
+    const [chatWidthPercent, setChatWidthPercent] = useState(33.33); // Default 1/3 width
+    const [isResizing, setIsResizing] = useState(false);
+    const resizeStartX = React.useRef<number>(0);
+    const resizeStartWidth = React.useRef<number>(33.33);
 
     useEffect(() => {
       if (expoUrl) {
@@ -339,22 +343,85 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
     };
 
+    // Resize handler functions
+    const startResizing = (e: React.PointerEvent) => {
+      if (!chatStarted) {
+        return;
+      }
+
+      const target = e.currentTarget as HTMLElement;
+      target.setPointerCapture(e.pointerId);
+
+      setIsResizing(true);
+      resizeStartX.current = e.clientX;
+      resizeStartWidth.current = chatWidthPercent;
+
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ew-resize';
+    };
+
+    const handleResize = (e: React.PointerEvent) => {
+      if (!isResizing) {
+        return;
+      }
+
+      const deltaX = e.clientX - resizeStartX.current;
+      const containerWidth = window.innerWidth;
+      const deltaPercent = (deltaX / containerWidth) * 100;
+
+      let newWidth = resizeStartWidth.current + deltaPercent;
+
+      // Constrain between 20% and 80%
+      newWidth = Math.max(20, Math.min(80, newWidth));
+
+      setChatWidthPercent(newWidth);
+    };
+
+    const stopResizing = (e: React.PointerEvent) => {
+      if (!isResizing) {
+        return;
+      }
+
+      const target = e.currentTarget as HTMLElement;
+      target.releasePointerCapture(e.pointerId);
+
+      setIsResizing(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
     const baseChat = (
       <div
         ref={ref}
-        className={classNames(styles.BaseChat, 'relative flex h-full w-full overflow-hidden')}
+        className={classNames(
+          styles.BaseChat,
+          'relative flex h-full w-full',
+          chatStarted ? 'overflow-hidden' : 'overflow-y-auto',
+        )}
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
-        <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
-          <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
+        <div
+          className={classNames(
+            'flex flex-col lg:flex-row w-full',
+            chatStarted ? 'h-full overflow-hidden' : 'min-h-full',
+          )}
+        >
+          <div
+            className={classNames(styles.Chat, 'flex flex-col', chatStarted ? 'h-full overflow-hidden' : 'min-h-full')}
+            style={{
+              width: chatStarted ? `${chatWidthPercent}%` : '100%',
+              minWidth: chatStarted ? '300px' : undefined,
+              flexShrink: 0,
+            }}
+          >
             {!chatStarted && (
-              <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
+              <div id="intro" className="mt-[16vh] max-w-4xl mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
+                  Create your websites with AI
                 </h1>
                 <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Bring ideas to life in seconds or get help on existing projects.
+                  Start prompting the chat interface below to build your ideal website
                 </p>
               </div>
             )}
@@ -485,13 +552,59 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                     handleSendMessage?.(event, messageInput);
                   })}
-                {!chatStarted && <StarterTemplates />}
               </div>
+              {!chatStarted && <ClientOnly>{() => <RecentTasks />}</ClientOnly>}
             </div>
           </div>
+          {chatStarted && (
+            <div
+              className="resize-handle"
+              onPointerDown={startResizing}
+              onPointerMove={handleResize}
+              onPointerUp={stopResizing}
+              onPointerCancel={stopResizing}
+              style={{
+                width: '8px',
+                cursor: 'ew-resize',
+                backgroundColor: isResizing
+                  ? 'var(--bolt-elements-borderColorActive)'
+                  : 'var(--bolt-elements-borderColor)',
+                flexShrink: 0,
+                transition: isResizing ? 'none' : 'background-color 0.2s',
+                position: 'relative',
+                zIndex: 10,
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '3px',
+                  height: '40px',
+                  backgroundColor: 'var(--bolt-elements-textTertiary)',
+                  borderRadius: '2px',
+                  opacity: 0.5,
+                }}
+              />
+            </div>
+          )}
           <ClientOnly>
             {() => (
-              <Workbench chatStarted={chatStarted} isStreaming={isStreaming} setSelectedElement={setSelectedElement} />
+              <div
+                style={{
+                  width: chatStarted ? `${100 - chatWidthPercent}%` : '0%',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <Workbench
+                  chatStarted={chatStarted}
+                  isStreaming={isStreaming}
+                  setSelectedElement={setSelectedElement}
+                />
+              </div>
             )}
           </ClientOnly>
         </div>

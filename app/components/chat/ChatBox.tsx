@@ -1,17 +1,12 @@
 import React from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { classNames } from '~/utils/classNames';
-import { PROVIDER_LIST } from '~/utils/constants';
-import { ModelSelector } from '~/components/chat/ModelSelector';
-import { APIKeyManager } from './APIKeyManager';
-import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 import FilePreview from './FilePreview';
 import { ScreenshotStateManager } from './ScreenshotStateManager';
 import { SendButton } from './SendButton.client';
 import { IconButton } from '~/components/ui/IconButton';
 import { toast } from 'react-toastify';
 import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
-import { SupabaseConnection } from './SupabaseConnection';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import styles from './BaseChat.module.scss';
 import type { ProviderInfo } from '~/types/model';
@@ -102,36 +97,6 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
         <rect className={classNames(styles.PromptEffectLine)} pathLength="100" strokeLinecap="round"></rect>
         <rect className={classNames(styles.PromptShine)} x="48" y="24" width="70" height="1"></rect>
       </svg>
-      <div>
-        <ClientOnly>
-          {() => (
-            <div className={props.isModelSettingsCollapsed ? 'hidden' : ''}>
-              <ModelSelector
-                key={props.provider?.name + ':' + props.modelList.length}
-                model={props.model}
-                setModel={props.setModel}
-                modelList={props.modelList}
-                provider={props.provider}
-                setProvider={props.setProvider}
-                providerList={props.providerList || (PROVIDER_LIST as ProviderInfo[])}
-                apiKeys={props.apiKeys}
-                modelLoading={props.isModelLoading}
-              />
-              {(props.providerList || []).length > 0 &&
-                props.provider &&
-                !LOCAL_PROVIDERS.includes(props.provider.name) && (
-                  <APIKeyManager
-                    provider={props.provider}
-                    apiKey={props.apiKeys[props.provider.name] || ''}
-                    setApiKey={(key) => {
-                      props.onApiKeysChange(props.provider.name, key);
-                    }}
-                  />
-                )}
-            </div>
-          )}
-        </ClientOnly>
-      </div>
       <FilePreview
         files={props.uploadedFiles}
         imageDataList={props.imageDataList}
@@ -166,9 +131,7 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
           </button>
         </div>
       )}
-      <div
-        className={classNames('relative shadow-xs border border-bolt-elements-borderColor backdrop-blur rounded-lg')}
-      >
+      <div className={classNames('relative')}>
         <textarea
           ref={props.textareaRef}
           className={classNames(
@@ -236,7 +199,9 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             minHeight: props.TEXTAREA_MIN_HEIGHT,
             maxHeight: props.TEXTAREA_MAX_HEIGHT,
           }}
-          placeholder={props.chatMode === 'build' ? 'How can Bolt help you today?' : 'What would you like to discuss?'}
+          placeholder={
+            props.chatMode === 'build' ? 'How can HTXBot help you today?' : 'What would you like to discuss?'
+          }
           translate="no"
         />
         <ClientOnly>
@@ -325,7 +290,6 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
               <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">Return</kbd> a new line
             </div>
           ) : null}
-          <SupabaseConnection />
           <ExpoQrModal open={props.qrModalOpen} onClose={() => props.setQrModalOpen(false)} />
         </div>
       </div>

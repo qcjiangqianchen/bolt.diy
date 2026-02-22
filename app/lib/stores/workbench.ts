@@ -18,7 +18,9 @@ import { description } from '~/lib/persistence';
 import Cookies from 'js-cookie';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert, DeployAlert, SupabaseAlert } from '~/types/actions';
+import { createScopedLogger } from '~/utils/logger';
 
+const logger = createScopedLogger('Workbench');
 const { saveAs } = fileSaver;
 
 export interface ArtifactState {
@@ -46,7 +48,7 @@ export class WorkbenchStore {
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
-  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
+  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('preview');
   unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data.unsavedFiles ?? atom(new Set<string>());
   actionAlert: WritableAtom<ActionAlert | undefined> =
     import.meta.hot?.data.actionAlert ?? atom<ActionAlert | undefined>(undefined);
@@ -57,6 +59,7 @@ export class WorkbenchStore {
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
+  #devServerRestartTimer: ReturnType<typeof setTimeout> | null = null;
   constructor() {
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
@@ -83,8 +86,67 @@ export class WorkbenchStore {
     this.#globalExecutionQueue = this.#globalExecutionQueue.then(() => callback());
   }
 
+  /**
+   * Debounced mechanism to auto-restart the dev server after file actions complete.
+   * Uses a 5s debounce to allow the LLM's own start action time to complete first.
+   * After the delay, checks if the server is actually running:
+   * - If previews exist (server running) → just refresh the iframes
+   * - If no previews (server dead or start action deadlocked) → force restart
+   *   via direct terminal input, bypassing shell.executeCommand() which can deadlock
+   */
+  #scheduleDevServerRestart() {
+    if (this.#devServerRestartTimer) {
+      clearTimeout(this.#devServerRestartTimer);
+    }
+
+    this.#devServerRestartTimer = setTimeout(async () => {
+      this.#devServerRestartTimer = null;
+
+      // Find any artifact runner that has a stored start command
+      const artifacts = this.artifacts.get();
+      let runnerWithStartCmd: ArtifactState | null = null;
+
+      for (const artifact of Object.values(artifacts)) {
+        if (artifact.runner.currentStartCommand) {
+          runnerWithStartCmd = artifact;
+          break;
+        }
+      }
+
+      if (!runnerWithStartCmd) {
+        logger.debug('[Workbench] No stored start command found, skipping auto-restart');
+        return;
+      }
+
+      // Check if the server is actually running by looking for active previews
+      const previews = this.#previewsStore.previews.get();
+
+      if (previews.length > 0) {
+        // Server is still running — just refresh the iframes
+        logger.info('[Workbench] Server still running, refreshing previews');
+        this.#previewsStore.refreshAllPreviews();
+      } else {
+        /*
+         * No previews — server is down (killed by Ctrl+C or start action deadlocked).
+         * Force restart by writing directly to the terminal, bypassing executeCommand.
+         */
+        logger.info('[Workbench] No previews detected, force restarting dev server');
+        await runnerWithStartCmd.runner.forceRestartDevServer();
+
+        /*
+         * The WebContainer 'server-ready' event will fire when the server is up,
+         * which triggers refreshSignal increment → iframe reload.
+         */
+      }
+    }, 5000);
+  }
+
   get previews() {
     return this.#previewsStore.previews;
+  }
+
+  get previewsStore() {
+    return this.#previewsStore;
   }
 
   get files() {
@@ -523,8 +585,9 @@ export class WorkbenchStore {
     this.artifacts.setKey(artifactId, { ...artifact, ...state });
   }
   addAction(data: ActionCallbackData) {
-    // this._addAction(data);
-
+    logger.info(
+      `[Workbench.addAction] Adding action ${data.actionId}, type: ${data.action.type}, artifact: ${data.artifactId}`,
+    );
     this.addToExecutionQueue(() => this._addAction(data));
   }
   async _addAction(data: ActionCallbackData) {
@@ -536,10 +599,16 @@ export class WorkbenchStore {
       unreachable('Artifact not found');
     }
 
+    logger.info(`[Workbench._addAction] Calling artifact.runner.addAction for ${data.actionId}`);
+
     return artifact.runner.addAction(data);
   }
 
   runAction(data: ActionCallbackData, isStreaming: boolean = false) {
+    logger.info(
+      `[runAction] Called for action ${data.actionId}, isStreaming: ${isStreaming}, type: ${data.action.type}`,
+    );
+
     if (isStreaming) {
       this.actionStreamSampler(data, isStreaming);
     } else {
@@ -557,9 +626,26 @@ export class WorkbenchStore {
 
     const action = artifact.runner.actions.get()[data.actionId];
 
-    if (!action || action.executed) {
+    logger.info(
+      `[_runAction] Action ${data.actionId}: exists=${!!action}, executed=${action?.executed}, isStreaming=${isStreaming}, type=${data.action.type}`,
+    );
+
+    if (!action) {
+      logger.warn(`[_runAction] Skipping action ${data.actionId} - not found`);
       return;
     }
+
+    // Skip if already executed, UNLESS it's a file action being finalized (closed after streaming)
+    const isFileActionBeingFinalized = !isStreaming && data.action.type === 'file';
+
+    if (action.executed && !isFileActionBeingFinalized) {
+      logger.warn(`[_runAction] Skipping action ${data.actionId} - already executed (not finalizing)`);
+      return;
+    }
+
+    logger.info(
+      `[_runAction] Executing action ${data.actionId}, type: ${data.action.type}, finalizing: ${isFileActionBeingFinalized}`,
+    );
 
     if (data.action.type === 'file') {
       const wc = await webcontainer;
@@ -575,9 +661,14 @@ export class WorkbenchStore {
         this.setSelectedFile(fullPath);
       }
 
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
-      }
+      /*
+       * Keep preview as the default view for non-technical users.
+       * Only switch to code view internally if absolutely needed (not user-facing).
+       * const previews = this.#previewsStore.previews.get();
+       * if (this.currentView.value !== 'code' && previews.length === 0) {
+       *   this.currentView.set('code');
+       * }
+       */
 
       const doc = this.#editorStore.documents.get()[fullPath];
 
@@ -588,12 +679,26 @@ export class WorkbenchStore {
       this.#editorStore.updateFile(fullPath, data.action.content);
 
       if (!isStreaming && data.action.content) {
+        logger.info(`[_runAction] Saving file ${fullPath}, size: ${data.action.content.length} bytes`);
         await this.saveFile(fullPath);
+        logger.info(`[_runAction] File saved successfully: ${fullPath}`);
       }
 
       if (!isStreaming) {
+        logger.info(`[_runAction] Running action in runner to write to WebContainer`);
         await artifact.runner.runAction(data);
         this.resetAllFileModifications();
+        logger.info(`[_runAction] Action completed and file modifications reset`);
+
+        // Immediately refresh all previews (works if server is still running and HMR processed the change)
+        logger.info(`[_runAction] Refreshing all previews after file update`);
+        this.#previewsStore.refreshAllPreviews();
+
+        /*
+         * Also schedule a debounced dev server restart check.
+         * If the server stopped, this will restart it. If still running, it does a second refresh.
+         */
+        this.#scheduleDevServerRestart();
       }
     } else {
       await artifact.runner.runAction(data);

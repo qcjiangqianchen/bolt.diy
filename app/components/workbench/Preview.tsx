@@ -1,11 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { IconButton } from '~/components/ui/IconButton';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { PortDropdown } from './PortDropdown';
 import { ScreenshotSelector } from './ScreenshotSelector';
-import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
-import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import type { ElementInfo } from './Inspector';
 
 type ResizeSide = 'left' | 'right' | null;
@@ -55,18 +51,26 @@ const WINDOW_SIZES: WindowSize[] = [
 export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+
+  /*
+   * Input ref (used when toolbar is enabled)
+   * const inputRef = useRef<HTMLInputElement>(null);
+   */
   const [activePreviewIndex, setActivePreviewIndex] = useState(0);
-  const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  /*
+   * Port dropdown state (used when toolbar is enabled)
+   * const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
+   */
+  const [, setIsFullscreen] = useState(false);
   const hasSelectedPreview = useRef(false);
   const previews = useStore(workbenchStore.previews);
   const activePreview = previews[activePreviewIndex];
-  const [displayPath, setDisplayPath] = useState('/');
+  const [, setDisplayPath] = useState('/');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [isInspectorMode, setIsInspectorMode] = useState(false);
-  const [isDeviceModeOn, setIsDeviceModeOn] = useState(false);
+  const [isInspectorMode] = useState(false);
+  const [isDeviceModeOn] = useState(false);
   const [widthPercent, setWidthPercent] = useState<number>(37.5);
   const [currentWidth, setCurrentWidth] = useState<number>(0);
 
@@ -82,13 +86,19 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
   // Reduce scaling factor to make resizing less sensitive
   const SCALING_FACTOR = 1;
 
-  const [isWindowSizeDropdownOpen, setIsWindowSizeDropdownOpen] = useState(false);
-  const [selectedWindowSize, setSelectedWindowSize] = useState<WindowSize>(WINDOW_SIZES[0]);
-  const [isLandscape, setIsLandscape] = useState(false);
-  const [showDeviceFrame, setShowDeviceFrame] = useState(true);
+  /*
+   * Window size state (used when toolbar is enabled)
+   * const [isWindowSizeDropdownOpen, setIsWindowSizeDropdownOpen] = useState(false);
+   */
+  const [selectedWindowSize] = useState<WindowSize>(WINDOW_SIZES[0]);
+  const [isLandscape] = useState(false);
   const [showDeviceFrameInPreview, setShowDeviceFrameInPreview] = useState(false);
-  const expoUrl = useStore(expoUrlAtom);
-  const [isExpoQrModalOpen, setIsExpoQrModalOpen] = useState(false);
+
+  /*
+   * Expo state (used when toolbar is enabled)
+   * const expoUrl = useStore(expoUrlAtom);
+   * const [isExpoQrModalOpen, setIsExpoQrModalOpen] = useState(false);
+   */
 
   useEffect(() => {
     if (!activePreview) {
@@ -117,19 +127,61 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
     }
   }, [previews, findMinPortIndex]);
 
-  const reloadPreview = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
-    }
-  };
+  /*
+   * Reload preview (used when toolbar is enabled)
+   * const reloadPreview = () => {
+   *   if (iframeRef.current) {
+   *     iframeRef.current.src = iframeRef.current.src;
+   *   }
+   * };
+   */
 
-  const toggleFullscreen = async () => {
-    if (!isFullscreen && containerRef.current) {
-      await containerRef.current.requestFullscreen();
-    } else if (document.fullscreenElement) {
-      await document.exitFullscreen();
+  // Auto-reload the preview iframe when files change
+  const refreshSignal = useStore(workbenchStore.previewsStore.refreshSignal);
+
+  useEffect(() => {
+    // Skip the initial render (signal = 0)
+    if (refreshSignal > 0 && iframeRef.current) {
+      // Delay to let Vite HMR or static server pick up/process the file change
+      const timer = setTimeout(() => {
+        if (iframeRef.current) {
+          /*
+           * Force a real reload by clearing src first, then restoring it.
+           * Simply doing `src = src` can be a no-op in some browsers.
+           */
+          const currentSrc = iframeRef.current.src;
+
+          try {
+            iframeRef.current.contentWindow?.location.reload();
+          } catch {
+            // Cross-origin fallback: clear and re-set the src
+            iframeRef.current.src = 'about:blank';
+
+            setTimeout(() => {
+              if (iframeRef.current) {
+                iframeRef.current.src = currentSrc;
+              }
+            }, 100);
+          }
+        }
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
-  };
+
+    return undefined;
+  }, [refreshSignal]);
+
+  /*
+   * Toggle fullscreen (used when toolbar is enabled)
+   * const toggleFullscreen = async () => {
+   *   if (!isFullscreen && containerRef.current) {
+   *     await containerRef.current.requestFullscreen();
+   *   } else if (document.fullscreenElement) {
+   *     await document.exitFullscreen();
+   *   }
+   * };
+   */
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -143,9 +195,12 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
     };
   }, []);
 
-  const toggleDeviceMode = () => {
-    setIsDeviceModeOn((prev) => !prev);
-  };
+  /*
+   * Toggle device mode (used when toolbar is enabled)
+   * const toggleDeviceMode = () => {
+   *   setIsDeviceModeOn((prev) => !prev);
+   * };
+   */
 
   const startResizing = (e: React.PointerEvent, side: ResizeSide) => {
     if (!isDeviceModeOn) {
@@ -375,185 +430,15 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
     </div>
   );
 
-  const openInNewWindow = (size: WindowSize) => {
-    if (activePreview?.baseUrl) {
-      const match = activePreview.baseUrl.match(/^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/);
+  /*
+   * openInNewWindow - Opens preview in a new browser window with optional device frame
+   * (used when toolbar is enabled)
+   */
 
-      if (match) {
-        const previewId = match[1];
-        const previewUrl = `/webcontainer/preview/${previewId}`;
-
-        // Adjust dimensions for landscape mode if applicable
-        let width = size.width;
-        let height = size.height;
-
-        if (isLandscape && (size.frameType === 'mobile' || size.frameType === 'tablet')) {
-          // Swap width and height for landscape mode
-          width = size.height;
-          height = size.width;
-        }
-
-        // Create a window with device frame if enabled
-        if (showDeviceFrame && size.hasFrame) {
-          // Calculate frame dimensions
-          const frameWidth = size.frameType === 'mobile' ? (isLandscape ? 120 : 40) : 60; // Width padding on each side
-          const frameHeight = size.frameType === 'mobile' ? (isLandscape ? 80 : 80) : isLandscape ? 60 : 100; // Height padding on top and bottom
-
-          // Create a window with the correct dimensions first
-          const newWindow = window.open(
-            '',
-            '_blank',
-            `width=${width + frameWidth},height=${height + frameHeight + 40},menubar=no,toolbar=no,location=no,status=no`,
-          );
-
-          if (!newWindow) {
-            console.error('Failed to open new window');
-            return;
-          }
-
-          // Create the HTML content for the frame
-          const frameColor = getFrameColor();
-          const frameRadius = size.frameType === 'mobile' ? '36px' : '20px';
-          const framePadding =
-            size.frameType === 'mobile'
-              ? isLandscape
-                ? '40px 60px'
-                : '40px 20px'
-              : isLandscape
-                ? '30px 50px'
-                : '50px 30px';
-
-          // Position notch and home button based on orientation
-          const notchTop = isLandscape ? '50%' : '20px';
-          const notchLeft = isLandscape ? '30px' : '50%';
-          const notchTransform = isLandscape ? 'translateY(-50%)' : 'translateX(-50%)';
-          const notchWidth = isLandscape ? '8px' : size.frameType === 'mobile' ? '60px' : '80px';
-          const notchHeight = isLandscape ? (size.frameType === 'mobile' ? '60px' : '80px') : '8px';
-
-          const homeBottom = isLandscape ? '50%' : '15px';
-          const homeRight = isLandscape ? '30px' : '50%';
-          const homeTransform = isLandscape ? 'translateY(50%)' : 'translateX(50%)';
-          const homeWidth = isLandscape ? '4px' : '40px';
-          const homeHeight = isLandscape ? '40px' : '4px';
-
-          // Create HTML content for the wrapper page
-          const htmlContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <title>${size.name} Preview</title>
-              <style>
-                body {
-                  margin: 0;
-                  padding: 0;
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  height: 100vh;
-                  background: #f0f0f0;
-                  overflow: hidden;
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                }
-                
-                .device-container {
-                  position: relative;
-                }
-                
-                .device-name {
-                  position: absolute;
-                  top: -30px;
-                  left: 0;
-                  right: 0;
-                  text-align: center;
-                  font-size: 14px;
-                  color: #333;
-                }
-                
-                .device-frame {
-                  position: relative;
-                  border-radius: ${frameRadius};
-                  background: ${frameColor};
-                  padding: ${framePadding};
-                  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                  overflow: hidden;
-                }
-                
-                /* Notch */
-                .device-frame:before {
-                  content: '';
-                  position: absolute;
-                  top: ${notchTop};
-                  left: ${notchLeft};
-                  transform: ${notchTransform};
-                  width: ${notchWidth};
-                  height: ${notchHeight};
-                  background: #333;
-                  border-radius: 4px;
-                  z-index: 2;
-                }
-                
-                /* Home button */
-                .device-frame:after {
-                  content: '';
-                  position: absolute;
-                  bottom: ${homeBottom};
-                  right: ${homeRight};
-                  transform: ${homeTransform};
-                  width: ${homeWidth};
-                  height: ${homeHeight};
-                  background: #333;
-                  border-radius: 50%;
-                  z-index: 2;
-                }
-                
-                iframe {
-                  border: none;
-                  width: ${width}px;
-                  height: ${height}px;
-                  background: white;
-                  display: block;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="device-container">
-                <div class="device-name">${size.name} ${isLandscape ? '(Landscape)' : '(Portrait)'}</div>
-                <div class="device-frame">
-                  <iframe src="${previewUrl}" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin" allow="cross-origin-isolated"></iframe>
-                </div>
-              </div>
-            </body>
-            </html>
-          `;
-
-          // Write the HTML content to the new window
-          newWindow.document.open();
-          newWindow.document.write(htmlContent);
-          newWindow.document.close();
-        } else {
-          // Standard window without frame
-          const newWindow = window.open(
-            previewUrl,
-            '_blank',
-            `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`,
-          );
-
-          if (newWindow) {
-            newWindow.focus();
-          }
-        }
-      } else {
-        console.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
-      }
-    }
-  };
-
-  const openInNewTab = () => {
-    if (activePreview?.baseUrl) {
-      window.open(activePreview?.baseUrl, '_blank');
-    }
-  };
+  /*
+   * openInNewTab - Opens preview in a new browser tab
+   * (used when toolbar is enabled)
+   */
 
   // Function to get the correct frame padding based on orientation
   const getFramePadding = useCallback(() => {
@@ -645,24 +530,20 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
     return () => window.removeEventListener('message', handleMessage);
   }, [isInspectorMode]);
 
-  const toggleInspectorMode = () => {
-    const newInspectorMode = !isInspectorMode;
-    setIsInspectorMode(newInspectorMode);
-
-    if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(
-        {
-          type: 'INSPECTOR_ACTIVATE',
-          active: newInspectorMode,
-        },
-        '*',
-      );
-    }
-  };
+  /*
+   * toggleInspectorMode - Toggles the inspector mode for element selection
+   * (used when toolbar is enabled)
+   */
 
   return (
     <div ref={containerRef} className={`w-full h-full flex flex-col relative`}>
-      {isPortDropdownOpen && (
+      {/* ============================================================
+       * HIDDEN (2026-02-23): Preview toolbar — URL address bar, port dropdown,
+       * reload button, selection mode, device mode, inspector, fullscreen,
+       * and window size dropdown. All hidden to simplify the UI for
+       * non-technical users. To restore, uncomment this entire block.
+       * ============================================================ */}
+      {/* {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
       <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-2">
@@ -798,7 +679,6 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
                           const previewId = match[1];
                           const previewUrl = `/webcontainer/preview/${previewId}`;
 
-                          // Open in a new window with simple parameters
                           window.open(
                             previewUrl,
                             `preview-${previewId}`,
@@ -895,7 +775,10 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
             )}
           </div>
         </div>
-      </div>
+      </div> */}
+      {/* ============================================================
+       * END HIDDEN: Preview toolbar (2026-02-23)
+       * ============================================================ */}
 
       <div className="flex-1 border-t border-bolt-elements-borderColor flex justify-center items-center overflow-auto">
         <div

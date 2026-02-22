@@ -65,35 +65,11 @@ export function useSupabaseConnection() {
     isConnecting.set(true);
 
     try {
-      const cleanToken = connection.token.trim();
+      // Stub - Supabase API disabled
+      console.warn('Supabase API is disabled');
+      isConnecting.set(false);
 
-      const response = await fetch('/api/supabase', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: cleanToken,
-        }),
-      });
-
-      const data = (await response.json()) as any;
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to connect');
-      }
-
-      updateSupabaseConnection({
-        user: data.user,
-        token: connection.token,
-        stats: data.stats,
-      });
-
-      toast.success('Successfully connected to Supabase');
-
-      setIsProjectsExpanded(true);
-
-      return true;
+      return false;
     } catch (error) {
       console.error('Connection error:', error);
       logStore.logError('Failed to authenticate with Supabase', { error });

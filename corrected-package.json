@@ -1,0 +1,7 @@
+{
+  "name": "simple-form",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npx --yes servor index.html"
+  }
+}

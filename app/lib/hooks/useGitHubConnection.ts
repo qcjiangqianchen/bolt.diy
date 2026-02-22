@@ -215,8 +215,9 @@ export function useGitHubConnection(): UseGitHubConnectionReturn {
       const isServerSide = !connection.token;
 
       if (isServerSide) {
-        const response = await fetch('/api/github-user');
-        return response.ok;
+        // Stub - GitHub user API disabled
+        console.warn('GitHub user API is disabled');
+        return false;
       }
 
       // For client-side connections, test directly

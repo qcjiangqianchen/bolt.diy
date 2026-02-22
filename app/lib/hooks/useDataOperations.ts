@@ -986,17 +986,13 @@ export function useDataOperations({
     });
 
     try {
-      // Step 1: Get API keys from all sources
-      showProgress('Retrieving API keys', 25);
+      // Stub - API keys export disabled (using only local model)
+      showProgress('Creating file', 50);
 
-      // Create a fetch request to get API keys from server
-      const response = await fetch('/api/export-api-keys');
-
-      if (!response.ok) {
-        throw new Error('Failed to retrieve API keys from server');
-      }
-
-      const apiKeys = await response.json();
+      const apiKeys = {
+        message: 'API key export is disabled - using local Ollama model only',
+        ollama: { configured: true },
+      };
 
       // Step 2: Create blob
       showProgress('Creating file', 50);

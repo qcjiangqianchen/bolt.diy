@@ -84,32 +84,14 @@ export const useMCPStore = create<Store & Actions>((set, get) => ({
     }
   },
   checkServersAvailabilities: async () => {
-    const response = await fetch('/api/mcp-check', {
-      method: 'GET',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-    }
-
-    const serverTools = (await response.json()) as MCPServerTools;
-
-    set(() => ({ serverTools }));
+    // Stub - MCP check API disabled
+    console.warn('MCP check API is disabled');
+    set(() => ({ serverTools: {} }));
   },
 }));
 
-async function updateServerConfig(config: MCPConfig) {
-  const response = await fetch('/api/mcp-update-config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-  }
-
-  const data = (await response.json()) as MCPServerTools;
-
-  return data;
+async function updateServerConfig(_config: MCPConfig) {
+  // Stub - MCP update config API disabled
+  console.warn('MCP update config API is disabled');
+  return {};
 }

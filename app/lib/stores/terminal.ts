@@ -9,7 +9,11 @@ export class TerminalStore {
   #terminals: Array<{ terminal: ITerminal; process: WebContainerProcess }> = [];
   #boltTerminal = newBoltShellProcess();
 
-  showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(true);
+  /*
+   * HIDDEN: Terminal is hidden from UI for non-technical users.
+   * To show the terminal again, change `atom(false)` back to `atom(true)`.
+   */
+  showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(false);
 
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;

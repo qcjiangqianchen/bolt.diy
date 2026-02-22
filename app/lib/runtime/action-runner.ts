@@ -67,6 +67,7 @@ export class ActionRunner {
   #webcontainer: Promise<WebContainer>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
   #shellTerminal: () => BoltShell;
+  #currentStartCommand: string | null = null;
   runnerId = atom<string>(`${Date.now()}`);
   actions: ActionsMap = map({});
   onAlert?: (alert: ActionAlert) => void;
@@ -86,6 +87,62 @@ export class ActionRunner {
     this.onAlert = onAlert;
     this.onSupabaseAlert = onSupabaseAlert;
     this.onDeployAlert = onDeployAlert;
+  }
+
+  /**
+   * Returns the last start command that was executed (e.g., 'npm run dev').
+   * Used by the workbench to auto-restart the dev server after file changes.
+   */
+  get currentStartCommand(): string | null {
+    return this.#currentStartCommand;
+  }
+
+  /**
+   * Returns true if any start action is currently pending or running.
+   * Used to avoid conflicting with the LLM's own start action.
+   */
+  hasActiveStartAction(): boolean {
+    const actions = this.actions.get();
+
+    for (const action of Object.values(actions)) {
+      if (action.type === 'start' && (action.status === 'pending' || action.status === 'running')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Force-restarts the dev server by writing directly to the terminal.
+   * This bypasses shell.executeCommand() which can deadlock when a previous
+   * long-running command (like a dev server) has a stuck waitTillOscCode reader
+   * competing for the same output stream.
+   */
+  async forceRestartDevServer(): Promise<void> {
+    if (!this.#currentStartCommand) {
+      logger.debug('[ActionRunner] No start command stored, skipping force restart');
+      return;
+    }
+
+    const shell = this.#shellTerminal();
+    await shell.ready();
+
+    if (!shell?.terminal) {
+      logger.warn('[ActionRunner] Cannot force restart: terminal not available');
+      return;
+    }
+
+    logger.info(`[ActionRunner] Force restarting dev server: ${this.#currentStartCommand}`);
+
+    // Send Ctrl+C to kill any running process
+    shell.terminal.input('\x03');
+
+    // Wait for the shell to process the interrupt and show a prompt
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Send the start command directly to the terminal
+    shell.terminal.input(this.#currentStartCommand.trim() + '\n');
   }
 
   addAction(data: ActionCallbackData) {
@@ -121,18 +178,30 @@ export class ActionRunner {
     const { actionId } = data;
     const action = this.actions.get()[actionId];
 
+    logger.info(
+      `[ActionRunner.runAction] Called for ${actionId}, type: ${action?.type}, isStreaming: ${isStreaming}, currentExecuted: ${action?.executed}`,
+    );
+
     if (!action) {
       unreachable(`Action ${actionId} not found`);
     }
 
-    if (action.executed) {
-      return; // No return value here
+    // Allow file actions to run on close even if already executed (to finalize/save)
+    const shouldSkip = action.executed && (isStreaming || action.type !== 'file');
+
+    if (shouldSkip) {
+      logger.warn(
+        `[ActionRunner] Skipping action ${actionId} - already executed (type: ${action.type}, isStreaming: ${isStreaming})`,
+      );
+      return;
     }
 
     if (isStreaming && action.type !== 'file') {
-      return; // No return value here
+      logger.debug(`[ActionRunner] Skipping non-file action during streaming: ${actionId}`);
+      return;
     }
 
+    logger.info(`[ActionRunner] Proceeding with action ${actionId}, will set executed=${!isStreaming}`);
     this.#updateAction(actionId, { ...action, ...data.action, executed: !isStreaming });
 
     this.#currentExecutionPromise = this.#currentExecutionPromise
@@ -151,6 +220,10 @@ export class ActionRunner {
   async #executeAction(actionId: string, isStreaming: boolean = false) {
     const action = this.actions.get()[actionId];
 
+    logger.info(
+      `[ActionRunner.#executeAction] Starting execution of ${actionId}, type: ${action.type}, isStreaming: ${isStreaming}`,
+    );
+
     this.#updateAction(actionId, { status: 'running' });
 
     try {
@@ -160,7 +233,9 @@ export class ActionRunner {
           break;
         }
         case 'file': {
+          logger.info(`[ActionRunner.#executeAction] Calling #runFileAction for ${actionId}`);
           await this.#runFileAction(action);
+          logger.info(`[ActionRunner.#executeAction] Completed #runFileAction for ${actionId}`);
           break;
         }
         case 'supabase': {
@@ -252,6 +327,8 @@ export class ActionRunner {
       unreachable('Expected shell action');
     }
 
+    logger.info(`[#runShellAction] Executing shell command: ${action.content}`);
+
     const shell = this.#shellTerminal();
     await shell.ready();
 
@@ -267,11 +344,13 @@ export class ActionRunner {
       action.content = validationResult.modifiedCommand;
     }
 
+    logger.info(`[#runShellAction] Calling shell.executeCommand with: ${action.content}`);
+
     const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
     });
-    logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
+    logger.info(`[#runShellAction] ${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
       const enhancedError = this.#createEnhancedShellError(action.content, resp?.exitCode, resp?.output);
@@ -295,6 +374,12 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
+    // Auto-install dependencies if node_modules doesn't exist but package.json has dependencies
+    await this.#autoInstallDependencies(shell);
+
+    // Store the command for auto-restart
+    this.#currentStartCommand = action.content;
+
     const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
@@ -306,6 +391,69 @@ export class ActionRunner {
     }
 
     return resp;
+  }
+
+  /**
+   * Checks if package.json has dependencies/devDependencies and node_modules doesn't exist,
+   * then automatically runs npm install before starting the dev server.
+   */
+  async #autoInstallDependencies(shell: BoltShell) {
+    try {
+      const webcontainer = await this.#webcontainer;
+
+      // Check if package.json exists
+      let packageJsonContent: string;
+
+      try {
+        packageJsonContent = await webcontainer.fs.readFile('package.json', 'utf-8');
+      } catch {
+        logger.debug('[autoInstall] No package.json found, skipping auto-install');
+        return;
+      }
+
+      // Check if it has dependencies
+      let packageJson: any;
+
+      try {
+        packageJson = JSON.parse(packageJsonContent);
+      } catch {
+        logger.debug('[autoInstall] Could not parse package.json, skipping auto-install');
+        return;
+      }
+
+      const hasDeps =
+        (packageJson.dependencies && Object.keys(packageJson.dependencies).length > 0) ||
+        (packageJson.devDependencies && Object.keys(packageJson.devDependencies).length > 0);
+
+      if (!hasDeps) {
+        logger.debug('[autoInstall] No dependencies in package.json, skipping');
+        return;
+      }
+
+      // Check if node_modules exists
+      try {
+        await webcontainer.fs.readdir('node_modules');
+        logger.debug('[autoInstall] node_modules already exists, skipping install');
+
+        return;
+      } catch {
+        // node_modules doesn't exist — need to install
+      }
+
+      logger.info('[autoInstall] Dependencies detected but node_modules missing, running npm install...');
+
+      const installResp = await shell.executeCommand(this.runnerId.get(), 'npm install --no-audit --no-fund', () => {
+        // intentionally empty - no output processing needed
+      });
+
+      if (installResp?.exitCode === 0) {
+        logger.info('[autoInstall] npm install completed successfully');
+      } else {
+        logger.error('[autoInstall] npm install failed with exit code:', installResp?.exitCode);
+      }
+    } catch (error) {
+      logger.error('[autoInstall] Error during auto-install:', error);
+    }
   }
 
   async #runFileAction(action: ActionState) {
@@ -335,6 +483,63 @@ export class ActionRunner {
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
+    }
+
+    // Auto-create missing imported asset files (CSS, JSON, etc.) to prevent runtime errors
+    await this.#createMissingImports(webcontainer, relativePath, action.content);
+  }
+
+  /**
+   * Scans file content for import statements that reference local files (CSS, JSON, images, etc.)
+   * and creates empty stub files if they don't exist. This prevents runtime crashes when the AI
+   * forgets to create a referenced file.
+   */
+  async #createMissingImports(webcontainer: WebContainer, filePath: string, content: string) {
+    // Only scan JS/JSX/TS/TSX files for imports
+    if (!/\.(jsx?|tsx?|mjs|cjs)$/.test(filePath)) {
+      return;
+    }
+
+    const fileDir = nodePath.dirname(filePath);
+
+    // Match import statements for local files: import "...", import '...', import x from '...'
+    const importRegex = /import\s+(?:[^'"]*\s+from\s+)?['"](\.[^'"]+)['"]/g;
+    let match;
+
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1];
+
+      // Only handle asset imports (CSS, SCSS, LESS, JSON, SVG, etc.) — not JS/TS modules
+      if (!/\.(css|scss|sass|less|json|svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|eot)$/.test(importPath)) {
+        continue;
+      }
+
+      // Use join + normalize to resolve relative paths (resolve is not available in browser path utils)
+      const resolvedPath = nodePath.normalize(nodePath.join(fileDir, importPath));
+
+      try {
+        await webcontainer.fs.readFile(resolvedPath);
+
+        // File exists, nothing to do
+      } catch {
+        // File doesn't exist — create an empty stub
+        const stubDir = nodePath.dirname(resolvedPath);
+
+        try {
+          await webcontainer.fs.mkdir(stubDir, { recursive: true });
+        } catch {
+          // Directory may already exist
+        }
+
+        const stubContent = importPath.endsWith('.json') ? '{}' : '/* Auto-generated stub */\n';
+
+        try {
+          await webcontainer.fs.writeFile(resolvedPath, stubContent);
+          logger.info(`Created missing import stub: ${resolvedPath}`);
+        } catch (err) {
+          logger.debug(`Could not create stub for ${resolvedPath}:`, err);
+        }
+      }
     }
   }
 
@@ -649,6 +854,19 @@ export class ActionRunner {
           };
         }
       }
+    }
+
+    /*
+     * Handle npx commands that require confirmation (servor, serve, http-server, etc.)
+     * Add --yes flag to bypass confirmation prompts
+     */
+    if (trimmedCommand.match(/^npx\s+(?!--yes)(servor|serve|http-server)/)) {
+      const modifiedCommand = trimmedCommand.replace(/^npx\s+/, 'npx --yes ');
+      return {
+        shouldModify: true,
+        modifiedCommand,
+        warning: 'Added --yes flag to npx command to bypass confirmation prompt',
+      };
     }
 
     return { shouldModify: false };

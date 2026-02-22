@@ -27,12 +27,12 @@ interface BranchSelectorProps {
 }
 
 export function BranchSelector({
-  provider,
+  provider: _provider,
   repoOwner,
   repoName,
   projectId,
-  token,
-  gitlabUrl,
+  token: _token,
+  gitlabUrl: _gitlabUrl,
   defaultBranch,
   onBranchSelect,
   onClose,
@@ -52,45 +52,12 @@ export function BranchSelector({
     setError(null);
 
     try {
-      let response: Response;
-
-      if (provider === 'github') {
-        response = await fetch('/api/github-branches', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            owner: repoOwner,
-            repo: repoName,
-            token,
-          }),
-        });
-      } else {
-        // GitLab
-        if (!projectId) {
-          throw new Error('Project ID is required for GitLab repositories');
-        }
-
-        response = await fetch('/api/gitlab-branches', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token,
-            gitlabUrl: gitlabUrl || 'https://gitlab.com',
-            projectId,
-          }),
-        });
-      }
-
-      if (!response.ok) {
-        const errorData: any = await response.json().catch(() => ({ error: 'Failed to fetch branches' }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const data: any = await response.json();
-      setBranches(data.branches || []);
+      // Stub - Branch fetching APIs disabled
+      console.warn('Branch fetching API is disabled');
+      setBranches([]);
 
       // Set default selected branch
-      const defaultBranchToSelect = data.defaultBranch || defaultBranch || 'main';
+      const defaultBranchToSelect = defaultBranch || 'main';
       setSelectedBranch(defaultBranchToSelect);
     } catch (err) {
       console.error('Failed to fetch branches:', err);

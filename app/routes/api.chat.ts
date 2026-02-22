@@ -2,14 +2,12 @@ import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createDataStream, generateId } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, type FileMap } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
-import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
+import { streamText, type Messages } from '~/lib/.server/llm/stream-text';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
-import type { IProviderSetting } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
-import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
+import { getFilePaths } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
 import { WORK_DIR } from '~/utils/constants';
-import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { DesignScheme } from '~/types/design-scheme';
 import { MCPService } from '~/lib/services/mcpService';
@@ -21,24 +19,6 @@ export async function action(args: ActionFunctionArgs) {
 
 const logger = createScopedLogger('api.chat');
 
-function parseCookies(cookieHeader: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-
-  const items = cookieHeader.split(';').map((cookie) => cookie.trim());
-
-  items.forEach((item) => {
-    const [name, ...rest] = item.split('=');
-
-    if (name && rest) {
-      const decodedName = decodeURIComponent(name.trim());
-      const decodedValue = decodeURIComponent(rest.join('=').trim());
-      cookies[decodedName] = decodedValue;
-    }
-  });
-
-  return cookies;
-}
-
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const streamRecovery = new StreamRecoveryManager({
     timeout: 45000,
@@ -48,31 +28,25 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     },
   });
 
-  const { messages, files, promptId, contextOptimization, supabase, chatMode, designScheme, maxLLMSteps } =
-    await request.json<{
-      messages: Messages;
-      files: any;
-      promptId?: string;
-      contextOptimization: boolean;
-      chatMode: 'discuss' | 'build';
-      designScheme?: DesignScheme;
-      supabase?: {
-        isConnected: boolean;
-        hasSelectedProject: boolean;
-        credentials?: {
-          anonKey?: string;
-          supabaseUrl?: string;
-        };
+  const { messages, files, promptId, contextOptimization, supabase, chatMode, designScheme } = await request.json<{
+    messages: Messages;
+    files: any;
+    promptId?: string;
+    contextOptimization: boolean;
+    chatMode: 'discuss' | 'build';
+    designScheme?: DesignScheme;
+    supabase?: {
+      isConnected: boolean;
+      hasSelectedProject: boolean;
+      credentials?: {
+        anonKey?: string;
+        supabaseUrl?: string;
       };
-      maxLLMSteps: number;
-    }>();
+    };
+    maxLLMSteps?: number;
+  }>();
 
-  const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = JSON.parse(parseCookies(cookieHeader || '').apiKeys || '{}');
-  const providerSettings: Record<string, IProviderSetting> = JSON.parse(
-    parseCookies(cookieHeader || '').providers || '{}',
-  );
-
+  // No need to parse API keys or provider settings for local model
   const stream = new SwitchableStream();
 
   const cumulativeUsage = {
@@ -106,78 +80,22 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         }
 
         if (filePaths.length > 0 && contextOptimization) {
-          logger.debug('Generating Chat Summary');
-          dataStream.writeData({
-            type: 'progress',
-            label: 'summary',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Analysing Request',
-          } satisfies ProgressAnnotation);
+          // Skip summary generation for local Ollama - not needed
+          logger.debug('Skipping chat summary generation for local model');
+          summary = undefined;
 
-          // Create a summary of the chat
-          console.log(`Messages count: ${processedMessages.length}`);
+          // Only write annotation if summary exists
+          if (summary) {
+            dataStream.writeMessageAnnotation({
+              type: 'chatSummary',
+              summary,
+              chatId: processedMessages.slice(-1)?.[0]?.id,
+            } as ContextAnnotation);
+          }
 
-          summary = await createSummary({
-            messages: [...processedMessages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('createSummary token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
-          dataStream.writeData({
-            type: 'progress',
-            label: 'summary',
-            status: 'complete',
-            order: progressCounter++,
-            message: 'Analysis Complete',
-          } satisfies ProgressAnnotation);
-
-          dataStream.writeMessageAnnotation({
-            type: 'chatSummary',
-            summary,
-            chatId: processedMessages.slice(-1)?.[0]?.id,
-          } as ContextAnnotation);
-
-          // Update context buffer
-          logger.debug('Updating Context Buffer');
-          dataStream.writeData({
-            type: 'progress',
-            label: 'context',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Determining Files to Read',
-          } satisfies ProgressAnnotation);
-
-          // Select context files
-          console.log(`Messages count: ${processedMessages.length}`);
-          filteredFiles = await selectContext({
-            messages: [...processedMessages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            files,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            summary,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('selectContext token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
+          // Skip AI-based context selection - just use all files for local model
+          logger.debug('Using all files as context (skipping AI-based selection for local model)');
+          filteredFiles = files;
 
           if (filteredFiles) {
             logger.debug(`files in context : ${JSON.stringify(Object.keys(filteredFiles))}`);
@@ -185,7 +103,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           dataStream.writeMessageAnnotation({
             type: 'codeContext',
-            files: Object.keys(filteredFiles).map((key) => {
+            files: Object.keys(filteredFiles || {}).map((key) => {
               let path = key;
 
               if (path.startsWith(WORK_DIR)) {
@@ -207,18 +125,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // logger.debug('Code Files Selected');
         }
 
-        const options: StreamingOptions = {
+        const options: any = {
           supabaseConnection: supabase,
-          toolChoice: 'auto',
-          tools: mcpService.toolsWithoutExecute,
-          maxSteps: maxLLMSteps,
-          onStepFinish: ({ toolCalls }) => {
+          onStepFinish: ({ toolCalls }: { toolCalls: any[] }) => {
             // add tool call annotations for frontend processing
-            toolCalls.forEach((toolCall) => {
+            toolCalls.forEach((toolCall: any) => {
               mcpService.processToolCall(toolCall, dataStream);
             });
           },
-          onFinish: async ({ text: content, finishReason, usage }) => {
+          onFinish: async ({ text: content, finishReason, usage }: { text: any; finishReason: any; usage: any }) => {
             logger.debug('usage', JSON.stringify(usage));
 
             if (usage) {
@@ -270,9 +185,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               messages: [...processedMessages],
               env: context.cloudflare?.env,
               options,
-              apiKeys,
               files,
-              providerSettings,
               promptId,
               contextOptimization,
               contextFiles: filteredFiles,
@@ -311,9 +224,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           messages: [...processedMessages],
           env: context.cloudflare?.env,
           options,
-          apiKeys,
           files,
-          providerSettings,
           promptId,
           contextOptimization,
           contextFiles: filteredFiles,
@@ -323,7 +234,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           messageSliceId,
         });
 
-        (async () => {
+        // Start error monitoring
+        const errorMonitor = (async () => {
           for await (const part of result.fullStream) {
             streamRecovery.updateActivity();
 
@@ -332,19 +244,17 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               logger.error('Streaming error:', error);
               streamRecovery.stop();
 
-              // Enhanced error handling for common streaming issues
-              if (error.message?.includes('Invalid JSON response')) {
-                logger.error('Invalid JSON response detected - likely malformed API response');
-              } else if (error.message?.includes('token')) {
-                logger.error('Token-related error detected - possible token limit exceeded');
-              }
-
               return;
             }
           }
           streamRecovery.stop();
         })();
-        result.mergeIntoDataStream(dataStream);
+
+        // Merge the Ollama stream into the data stream and wait for completion
+        await result.mergeIntoDataStream(dataStream);
+
+        // Wait for error monitor to complete
+        await errorMonitor;
       },
       onError: (error: any) => {
         // Provide more specific error messages for common issues

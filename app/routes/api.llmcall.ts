@@ -97,9 +97,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   if (streamOutput) {
     try {
       const result = await streamText({
-        options: {
-          system,
-        },
+        options: {},
         messages: [
           {
             role: 'user',
@@ -111,12 +109,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         providerSettings,
       });
 
-      return new Response(result.textStream, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-        },
-      });
+      return result.toDataStreamResponse();
     } catch (error: unknown) {
       console.log(error);
 

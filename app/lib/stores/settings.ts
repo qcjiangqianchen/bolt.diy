@@ -66,20 +66,14 @@ interface ConfiguredProvider {
 
 // Fetch configured providers from server
 const fetchConfiguredProviders = async (): Promise<ConfiguredProvider[]> => {
-  try {
-    const response = await fetch('/api/configured-providers');
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as { providers?: ConfiguredProvider[] };
-
-    return data.providers || [];
-  } catch (error) {
-    console.error('Error fetching configured providers:', error);
-    return [];
-  }
+  // Stub - configured providers API disabled, return Ollama as default
+  return [
+    {
+      name: 'Ollama',
+      isConfigured: true,
+      configMethod: 'environment',
+    },
+  ];
 };
 
 // Initialize provider settings from both localStorage and server-detected configuration

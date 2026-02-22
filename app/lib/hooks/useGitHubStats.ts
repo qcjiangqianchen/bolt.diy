@@ -169,19 +169,15 @@ export function useGitHubStats(
       let stats: GitHubStats;
 
       if (isServerSide || !connection.token) {
-        // Use server-side API for stats
-        const response = await fetch('/api/github-stats');
+        // Stub - GitHub stats API disabled
+        console.warn('GitHub stats API is disabled');
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isRefreshing: false,
+        }));
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error('GitHub authentication required');
-          }
-
-          const errorData: any = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch stats from server');
-        }
-
-        stats = await response.json();
+        return;
       } else {
         // Use client-side API service for stats
         if (!apiService) {

@@ -904,37 +904,8 @@ class DebugLogger {
   }
 
   private async _getGitInfo(): Promise<AppInfo['gitInfo']> {
-    try {
-      // Try to fetch git info from existing API endpoint
-      const response = await fetch('/api/system/git-info');
-
-      if (response.ok) {
-        const gitInfo = await response.json();
-
-        // Transform the API response to match our interface
-        const gitInfoTyped = gitInfo as any;
-
-        // Type assertion for API response
-        return {
-          branch: gitInfoTyped.local?.branch || 'unknown',
-          commit: gitInfoTyped.local?.commitHash || 'unknown',
-          isDirty: false, // The existing API doesn't provide this info
-          remoteUrl: gitInfoTyped.local?.remoteUrl,
-          lastCommit: gitInfoTyped.local
-            ? {
-                message: 'Latest commit',
-                date: gitInfoTyped.local.commitTime,
-                author: gitInfoTyped.local.author,
-              }
-            : undefined,
-        };
-      }
-    } catch {
-      // API not available, try client-side fallback
-      console.warn('Git info API not available, using fallback');
-    }
-
-    // Fallback: try to get basic git info from localStorage or known values
+    // Stub - system.git-info API disabled
+    console.warn('Git info API not available, using fallback');
     return this._getGitInfoFallback();
   }
 

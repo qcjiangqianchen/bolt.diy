@@ -178,7 +178,10 @@ export const EditorPanel = memo(
             </Panel>
           </PanelGroup>
         </Panel>
-        <PanelResizeHandle />
+        {/* HIDDEN: Terminal panel hidden for non-technical users.
+            To restore: 1) Remove `style={{ display: 'none' }}` from PanelResizeHandle
+                        2) Change `atom(false)` to `atom(true)` in app/lib/stores/terminal.ts */}
+        <PanelResizeHandle style={{ display: 'none' }} />
         <TerminalTabs />
       </PanelGroup>
     );

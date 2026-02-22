@@ -42,24 +42,9 @@ export function GitLabRepositorySelector({ onClone, className }: GitLabRepositor
     setError(null);
 
     try {
-      const response = await fetch('/api/gitlab-projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: connection.token,
-          gitlabUrl: connection.gitlabUrl || 'https://gitlab.com',
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData: any = await response.json().catch(() => ({ error: 'Failed to fetch repositories' }));
-        throw new Error(errorData.error || 'Failed to fetch repositories');
-      }
-
-      const data: any = await response.json();
-      setRepositories(data.projects || []);
+      // Stub - GitLab projects API disabled
+      console.warn('GitLab projects API is disabled');
+      setRepositories([]);
     } catch (err) {
       console.error('Failed to fetch GitLab repositories:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch repositories');

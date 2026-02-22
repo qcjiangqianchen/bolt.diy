@@ -35,7 +35,7 @@ export function SupabaseChatAlert({ alert, clearAlert, postMessage }: Props) {
   // Determine if we should show the Connect button or Apply Changes button
   const showConnectButton = !isConnected;
 
-  const executeSupabaseAction = async (sql: string) => {
+  const executeSupabaseAction = async (_sql: string) => {
     if (!connection.token || !connection.selectedProjectId) {
       console.error('No Supabase token or project selected');
       return;
@@ -44,25 +44,8 @@ export function SupabaseChatAlert({ alert, clearAlert, postMessage }: Props) {
     setIsExecuting(true);
 
     try {
-      const response = await fetch('/api/supabase/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${connection.token}`,
-        },
-        body: JSON.stringify({
-          projectId: connection.selectedProjectId,
-          query: sql,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = (await response.json()) as any;
-        throw new Error(`Supabase query failed: ${errorData.error?.message || response.statusText}`);
-      }
-
-      const result = await response.json();
-      console.log('Supabase query executed successfully:', result);
+      // Stub - Supabase query API disabled
+      console.warn('Supabase query API is disabled');
       clearAlert();
     } catch (error) {
       console.error('Failed to execute Supabase action:', error);

@@ -29,6 +29,12 @@ export class PreviewsStore {
 
   previews = atom<PreviewInfo[]>([]);
 
+  /**
+   * A counter that increments every time all previews should be refreshed.
+   * Preview components can subscribe to this to trigger iframe reloads.
+   */
+  refreshSignal = atom<number>(0);
+
   constructor(webcontainerPromise: Promise<WebContainer>) {
     this.#webcontainer = webcontainerPromise;
     this.#broadcastChannel = this.#maybeCreateChannel(PREVIEW_CHANNEL);
@@ -174,6 +180,15 @@ export class PreviewsStore {
       console.log('[Preview] Server ready on port:', port, url);
       this.broadcastUpdate(url);
 
+      /*
+       * Refresh all preview iframes when the server is ready.
+       * This ensures the iframe reloads after a server restart
+       * (e.g., when follow-up prompts modify files and restart the dev server).
+       */
+      setTimeout(() => {
+        this.refreshSignal.set(this.refreshSignal.get() + 1);
+      }, 500);
+
       // Initial storage sync when preview is ready
       this._broadcastStorageSync();
     });
@@ -294,6 +309,9 @@ export class PreviewsStore {
         this.broadcastFileChange(previewId);
       }
     }
+
+    // Increment the refresh signal so the embedded Preview component reloads the iframe
+    this.refreshSignal.set(this.refreshSignal.get() + 1);
   }
 }
 
