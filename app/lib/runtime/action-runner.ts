@@ -720,7 +720,7 @@ export class ActionRunner {
     details?: {
       url?: string;
       error?: string;
-      source?: 'netlify' | 'vercel' | 'github' | 'gitlab';
+      source?: 'netlify' | 'vercel' | 'github' | 'gitlab' | 'docker';
     },
   ): void {
     if (!this.onDeployAlert) {

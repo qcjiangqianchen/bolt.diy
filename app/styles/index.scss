@@ -16,10 +16,10 @@ body {
 
 :root {
   --gradient-opacity: 0.9;
-  --primary-color: rgba(138, 43, 226, var(--gradient-opacity));  /* Deeper purple */
+  --primary-color: rgba(138, 43, 226, var(--gradient-opacity)); /* Deeper purple */
   --secondary-color: rgba(147, 51, 234, var(--gradient-opacity)); /* Rich purple */
-  --accent-color: rgba(168, 85, 247, var(--gradient-opacity));    /* Vibrant purple */
-  --tertiary-color: rgba(99, 102, 241, var(--gradient-opacity));  /* Blue-purple */
+  --accent-color: rgba(168, 85, 247, var(--gradient-opacity)); /* Vibrant purple */
+  --tertiary-color: rgba(99, 102, 241, var(--gradient-opacity)); /* Blue-purple */
 }
 
 .modern-scrollbar {
