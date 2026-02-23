@@ -175,7 +175,9 @@ async function handleBuild(imageName: string, files: Record<string, string>): Pr
           controller.enqueue(encoder.encode(`\nERROR: ${err.message}\nMake sure Docker is installed and running.\n`));
 
           // Clean up temp directory
-          rm(buildDir, { recursive: true, force: true }).catch(() => {});
+          rm(buildDir, { recursive: true, force: true }).catch(() => {
+            /* ignore cleanup errors */
+          });
           controller.close();
         });
       },

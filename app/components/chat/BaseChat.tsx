@@ -11,6 +11,7 @@ import { classNames } from '~/utils/classNames';
 import { PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { getApiKeysFromCookies } from './APIKeyManager';
+import { workbenchStore } from '~/lib/stores/workbench';
 import Cookies from 'js-cookie';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import styles from './BaseChat.module.scss';
@@ -146,6 +147,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [qrModalOpen, setQrModalOpen] = useState(false);
     const [chatWidthPercent, setChatWidthPercent] = useState(33.33); // Default 1/3 width
     const [isResizing, setIsResizing] = useState(false);
+    const showWorkbench = useStore(workbenchStore.showWorkbench);
     const resizeStartX = React.useRef<number>(0);
     const resizeStartWidth = React.useRef<number>(33.33);
 
@@ -410,9 +412,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           <div
             className={classNames(styles.Chat, 'flex flex-col', chatStarted ? 'h-full overflow-hidden' : 'min-h-full')}
             style={{
-              width: chatStarted ? `${chatWidthPercent}%` : '100%',
-              minWidth: chatStarted ? '300px' : undefined,
+              width: chatStarted ? (showWorkbench ? `${chatWidthPercent}%` : '100%') : '100%',
+              minWidth: chatStarted && showWorkbench ? '300px' : undefined,
               flexShrink: 0,
+              transition: isResizing ? 'none' : 'width 0.3s ease',
             }}
           >
             {!chatStarted && (
@@ -556,7 +559,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               {!chatStarted && <ClientOnly>{() => <RecentTasks />}</ClientOnly>}
             </div>
           </div>
-          {chatStarted && (
+          {chatStarted && showWorkbench && (
             <div
               className="resize-handle"
               onPointerDown={startResizing}
@@ -594,9 +597,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {() => (
               <div
                 style={{
-                  width: chatStarted ? `${100 - chatWidthPercent}%` : '0%',
+                  width: chatStarted && showWorkbench ? `${100 - chatWidthPercent}%` : '0%',
                   flexShrink: 0,
                   overflow: 'hidden',
+                  transition: isResizing ? 'none' : 'width 0.3s ease',
                 }}
               >
                 <Workbench
