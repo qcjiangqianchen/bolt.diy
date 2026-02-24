@@ -4,18 +4,19 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { webcontainer } from '~/lib/webcontainer';
 import { path } from '~/utils/path';
 import { useState } from 'react';
-import type { ActionCallbackData } from '~/lib/runtime/message-parser';
 import { chatId } from '~/lib/persistence/useChatHistory';
 
 interface ProjectDetection {
   type: 'node' | 'static' | 'python' | 'unknown';
   hasPackageJson: boolean;
   hasBuildScript: boolean;
+  isSPA: boolean;
   buildCommand: string;
   startCommand: string;
   buildOutputDir: string;
   nodeVersion: string;
   packageManager: 'npm' | 'yarn' | 'pnpm';
+  port: number;
 }
 
 /**
@@ -26,11 +27,13 @@ function detectProject(files: Record<string, string>): ProjectDetection {
     type: 'unknown',
     hasPackageJson: false,
     hasBuildScript: false,
+    isSPA: false,
     buildCommand: '',
     startCommand: '',
     buildOutputDir: 'dist',
     nodeVersion: '20',
     packageManager: 'npm',
+    port: 3000,
   };
 
   // Check for package.json (Node.js project)
@@ -47,33 +50,67 @@ function detectProject(files: Record<string, string>): ProjectDetection {
         result.buildCommand = 'npm run build';
       }
 
-      // Detect start command
-      if (pkg.scripts?.start) {
-        result.startCommand = 'npm run start';
-      } else if (pkg.scripts?.serve) {
-        result.startCommand = 'npm run serve';
-      } else if (pkg.scripts?.preview) {
-        result.startCommand = 'npm run preview';
-      } else if (pkg.main) {
-        result.startCommand = `node ${pkg.main}`;
-      } else {
-        result.startCommand = 'node index.js';
-      }
-
-      // Detect build output directory from common frameworks
+      // Detect build output directory and framework type
       const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 
-      if (deps.next) {
+      // SSR / server frameworks — these have their own start command
+      const isNext = !!deps.next;
+      const isRemix = !!(deps['@remix-run/react'] || deps.remix);
+      const isNuxt = !!(deps.nuxt || deps.nuxt3);
+      const hasExpress = !!(deps.express || deps.fastify || deps.koa || deps.hapi);
+
+      // SPA / static-output frameworks
+      const isVite = !!(deps.vite || deps['@vitejs/plugin-react'] || deps['@vitejs/plugin-vue']);
+      const isCRA = !!deps['react-scripts'];
+      const isAngular = !!(deps['@angular/core'] || deps['@angular/cli']);
+      const isVue = !!(deps.vue && !deps.nuxt && !deps.nuxt3);
+
+      if (isNext) {
         result.buildOutputDir = '.next';
         result.startCommand = 'npm run start';
-      } else if (deps.nuxt || deps.nuxt3) {
+        result.port = 3000;
+      } else if (isNuxt) {
         result.buildOutputDir = '.output';
-      } else if (deps['@remix-run/react'] || deps.remix) {
+        result.startCommand = 'npm run start';
+        result.port = 3000;
+      } else if (isRemix) {
         result.buildOutputDir = 'build';
-      } else if (deps.vite || deps['@vitejs/plugin-react']) {
+        result.startCommand = 'npm run start';
+        result.port = 3000;
+      } else if (isCRA) {
+        result.buildOutputDir = 'build';
+      } else if (isVite || isAngular || isVue) {
         result.buildOutputDir = 'dist';
-      } else if (deps['react-scripts']) {
-        result.buildOutputDir = 'build';
+      }
+
+      // Determine start command
+      if (!result.startCommand) {
+        if (pkg.scripts?.start) {
+          result.startCommand = 'npm run start';
+        } else if (pkg.main) {
+          result.startCommand = `node ${pkg.main}`;
+        } else if (hasExpress) {
+          // Express/Fastify app without start script — guess common entry points
+          result.startCommand = files['server.js']
+            ? 'node server.js'
+            : files['app.js']
+              ? 'node app.js'
+              : files['src/index.js']
+                ? 'node src/index.js'
+                : 'node index.js';
+        }
+      }
+
+      /*
+       * Determine if this is a SPA (static single-page app).
+       * A SPA has a build step that outputs static HTML/JS/CSS and no server-side
+       * framework or start command.  It should be served with nginx, not Node.
+       */
+      const hasServerFramework = isNext || isRemix || isNuxt || hasExpress;
+
+      if (result.hasBuildScript && !hasServerFramework && !result.startCommand) {
+        result.isSPA = true;
+        result.port = 80;
       }
 
       // Detect Node.js version from engines
@@ -107,6 +144,7 @@ function detectProject(files: Record<string, string>): ProjectDetection {
     result.type = 'static';
     result.startCommand = '';
     result.buildOutputDir = '.';
+    result.port = 80;
   }
 
   return result;
@@ -131,7 +169,49 @@ function generateDockerfile(detection: ProjectDetection): string {
             ? 'COPY yarn.lock ./'
             : 'COPY package-lock.json ./';
 
-      if (detection.hasBuildScript) {
+      /*
+       * SPA: build with Node, serve static output with nginx.
+       * This handles Vite, CRA, Angular, plain React, etc.
+       */
+      if (detection.isSPA) {
+        return `# ---- Build Stage ----
+FROM node:${detection.nodeVersion}-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependency manifests
+COPY package.json ./
+${copyLockfile}
+
+# Install ALL dependencies (including devDependencies for the build)
+RUN ${installCmd}
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN ${detection.buildCommand}
+
+# ---- Production Stage ----
+FROM nginx:alpine
+
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy custom nginx config for SPA routing
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built static files from builder
+COPY --from=builder /app/${detection.buildOutputDir} /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+`;
+      }
+
+      // SSR / server app with a build step (Next.js, Remix, Nuxt, etc.)
+      if (detection.hasBuildScript && detection.startCommand) {
         return `# ---- Build Stage ----
 FROM node:${detection.nodeVersion}-alpine AS builder
 
@@ -157,25 +237,24 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy dependency manifests
+# Copy package files and install production deps
 COPY package.json ./
 ${copyLockfile}
-
-# Install production-only dependencies
 RUN ${installCmd} --production
 
 # Copy built artifacts from builder
 COPY --from=builder /app/${detection.buildOutputDir} ./${detection.buildOutputDir}
 
-# Expose default port
-EXPOSE 3000
+# Also copy any public/static assets that the server might reference
+COPY --from=builder /app/public ./public
 
-# Start the application
+EXPOSE ${detection.port}
+
 CMD ["sh", "-c", "${detection.startCommand}"]
 `;
       }
 
-      // No build step — simple Node.js server
+      // No build step — simple Node.js server (Express, etc.)
       return `FROM node:${detection.nodeVersion}-alpine
 
 WORKDIR /app
@@ -190,10 +269,9 @@ RUN ${installCmd}
 # Copy source code
 COPY . .
 
-# Expose default port
-EXPOSE 3000
+EXPOSE ${detection.port}
 
-CMD ["sh", "-c", "${detection.startCommand}"]
+CMD ["sh", "-c", "${detection.startCommand || 'node index.js'}"]
 `;
     }
 
@@ -252,7 +330,7 @@ CMD ["node", "index.js"]
  * Generates a docker-compose.yml based on the detected project type.
  */
 function generateDockerCompose(imageName: string, detection: ProjectDetection): string {
-  const port = detection.type === 'static' ? '80' : detection.type === 'python' ? '8000' : '3000';
+  const port = String(detection.port);
 
   return `version: "3.8"
 
@@ -337,49 +415,12 @@ export function useDockerDeploy() {
         throw new Error('No active project found');
       }
 
-      // Create a deployment artifact for visual feedback
-      const deploymentId = `deploy-docker-project`;
-      workbenchStore.addArtifact({
-        id: deploymentId,
-        messageId: deploymentId,
-        title: 'Docker Deployment',
-        type: 'standalone',
-      });
-
-      const deployArtifact = workbenchStore.artifacts.get()[deploymentId];
-
-      // Notify that build is starting
-      deployArtifact.runner.handleDeployAction('building', 'running', { source: 'docker' });
-
-      const actionId = 'build-' + Date.now();
-      const actionData: ActionCallbackData = {
-        messageId: 'docker build',
-        artifactId: artifact.id,
-        actionId,
-        action: {
-          type: 'build' as const,
-          content: 'npm run build',
-        },
-      };
-
-      // Add the action first
-      artifact.runner.addAction(actionData);
-
-      // Then run it
-      await artifact.runner.runAction(actionData);
-
-      if (!artifact.runner.buildOutput) {
-        deployArtifact.runner.handleDeployAction('building', 'failed', {
-          error: 'Build failed. Check the terminal for details.',
-          source: 'docker',
-        });
-        throw new Error('Build failed');
-      }
-
-      // Notify that build succeeded and Docker packaging is starting
-      deployArtifact.runner.handleDeployAction('deploying', 'running', {
-        source: 'docker',
-      });
+      /*
+       * Skip running `npm run build` in WebContainer.
+       * The Dockerfile already contains the build step — Docker (or Fly's remote
+       * builders) will compile the app during `docker build`. We only need to
+       * collect the source files here.
+       */
 
       // Get all project files from WebContainer
       const container = await webcontainer;
@@ -438,16 +479,10 @@ export function useDockerDeploy() {
       fileContents['docker-compose.yml'] = dockerCompose;
       fileContents['.dockerignore'] = dockerIgnore;
 
-      // Add nginx.conf for static sites
-      if (detection.type === 'static') {
+      // Add nginx.conf for static sites and SPAs (both served by nginx)
+      if (detection.type === 'static' || detection.isSPA) {
         fileContents['nginx.conf'] = generateNginxConf();
       }
-
-      deployArtifact.runner.handleDeployAction('deploying', 'complete', {
-        source: 'docker',
-      });
-
-      toast.success('Docker deployment package prepared successfully!');
 
       return {
         success: true,

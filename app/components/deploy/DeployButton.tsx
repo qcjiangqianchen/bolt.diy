@@ -2,11 +2,12 @@ import { useStore } from '@nanostores/react';
 import { isGitLabConnected } from '~/lib/stores/gitlabConnection';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { streamingState } from '~/lib/stores/streaming';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGitLabDeploy } from '~/components/deploy/GitLabDeploy.client';
 import { GitLabDeploymentDialog } from '~/components/deploy/GitLabDeploymentDialog';
 import { useDockerDeploy } from '~/components/deploy/DockerDeploy.client';
-import { DockerDeploymentDialog } from '~/components/deploy/DockerDeploymentDialog';
+import { DeployProgressDialog } from '~/components/deploy/DeployProgressDialog';
+import { toast } from 'react-toastify';
 
 interface DeployButtonProps {
   onGitLabDeploy?: () => Promise<void>;
@@ -24,13 +25,12 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
   const [gitlabDeploymentFiles, setGitlabDeploymentFiles] = useState<Record<string, string> | null>(null);
   const [gitlabProjectName, setGitlabProjectName] = useState('');
 
-  // Docker deploy state
-  const { handleDockerDeploy, isDeploying: isDockerDeploying } = useDockerDeploy();
-  const [showDockerDeploymentDialog, setShowDockerDeploymentDialog] = useState(false);
-  const [dockerDeploymentFiles, setDockerDeploymentFiles] = useState<Record<string, string> | null>(null);
-  const [dockerProjectName, setDockerProjectName] = useState('');
-  const [dockerDockerfile, setDockerDockerfile] = useState('');
-  const [dockerCompose, setDockerCompose] = useState('');
+  // One-click deploy state
+  const { handleDockerDeploy, isDeploying: isPackaging } = useDockerDeploy();
+  const [showDeployProgress, setShowDeployProgress] = useState(false);
+  const [deployStatus, setDeployStatus] = useState<'deploying' | 'success' | 'error'>('deploying');
+  const [deployLog, setDeployLog] = useState('');
+  const [deployedAppUrl, setDeployedAppUrl] = useState<string | null>(null);
 
   const handleGitLabDeployClick = async () => {
     setIsDeploying(true);
@@ -52,17 +52,88 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
     }
   };
 
-  const handleDockerDeployClick = async () => {
-    const result = await handleDockerDeploy();
+  /**
+   * One-click deploy: collect files → generate Dockerfile → deploy to Fly.io.
+   * No user configuration needed. App name is auto-derived from the project.
+   */
+  const handleOneClickDeploy = useCallback(async () => {
+    // Step 1: Show progress dialog immediately
+    setDeployLog('Preparing your application for deployment...\n');
+    setDeployStatus('deploying');
+    setDeployedAppUrl(null);
+    setShowDeployProgress(true);
 
-    if (result && result.success && result.files) {
-      setDockerDeploymentFiles(result.files);
-      setDockerProjectName(result.projectName);
-      setDockerDockerfile(result.dockerfile);
-      setDockerCompose(result.dockerCompose);
-      setShowDockerDeploymentDialog(true);
+    try {
+      // Step 2: Collect files and generate Docker artifacts
+      setDeployLog((prev) => prev + 'Building project and collecting files...\n');
+
+      const result = await handleDockerDeploy();
+
+      if (!result || !result.success || !result.files) {
+        throw new Error('Failed to prepare project files. Check the terminal for build errors.');
+      }
+
+      // Step 3: Auto-generate a unique app name (no user input)
+      const baseName = result.projectName.replace(/[^a-z0-9-]/g, '').slice(0, 24);
+      const suffix = Date.now().toString(36).slice(-4);
+      const flyAppName = `${baseName}-${suffix}`;
+
+      setDeployLog((prev) => prev + `Files collected. Deploying as "${flyAppName}"...\n\n`);
+
+      // Step 4: Send to server for Fly.io deployment
+      const response = await fetch('/api/deploy-docker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'fly-deploy',
+          imageName: `${result.projectName}:latest`,
+          files: result.files,
+          flyAppName,
+          flyRegion: 'iad',
+        }),
+      });
+
+      if (!response.ok && response.headers.get('content-type')?.includes('application/json')) {
+        const errorData = (await response.json().catch(() => ({ error: 'Unknown error' }))) as { error?: string };
+        throw new Error(errorData.error || `Deployment failed (${response.status})`);
+      }
+
+      // Step 5: Stream deployment logs and accumulate for success detection
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullLog = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          const text = decoder.decode(value, { stream: true });
+          fullLog += text;
+          setDeployLog((prev) => prev + text);
+        }
+      }
+
+      // Step 6: Check if the stream contained a failure marker
+      if (fullLog.includes('✗ Deployment failed') || fullLog.includes('deployment did not complete')) {
+        throw new Error('Deployment failed — check the log for details');
+      }
+
+      // Step 7: Done — show the URL
+      const appUrl = `https://${flyAppName}.fly.dev`;
+      setDeployedAppUrl(appUrl);
+      setDeployStatus('success');
+      toast.success('Application deployed successfully!');
+    } catch (error) {
+      console.error('Deploy failed:', error);
+      setDeployStatus('error');
+      setDeployLog((prev) => prev + `\nERROR: ${error instanceof Error ? error.message : 'Deployment failed'}\n`);
+      toast.error('Deployment failed');
     }
-  };
+  }, [handleDockerDeploy]);
 
   return (
     <>
@@ -84,13 +155,13 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
       </button>
 
       <button
-        onClick={handleDockerDeployClick}
-        disabled={isDockerDeploying || !activePreview || isStreaming}
-        className="rounded-md items-center justify-center [&:is(:disabled,.disabled)]:cursor-not-allowed [&:is(:disabled,.disabled)]:opacity-60 px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 outline-blue-600 flex gap-1.5 border border-bolt-elements-borderColor"
-        title="Deploy as Docker Image"
+        onClick={handleOneClickDeploy}
+        disabled={isPackaging || (deployStatus === 'deploying' && showDeployProgress) || !activePreview || isStreaming}
+        className="rounded-md items-center justify-center [&:is(:disabled,.disabled)]:cursor-not-allowed [&:is(:disabled,.disabled)]:opacity-60 px-3 py-1.5 text-xs bg-purple-600 text-white hover:bg-purple-700 outline-purple-600 flex gap-1.5 border border-bolt-elements-borderColor"
+        title="Deploy your application"
       >
-        <div className="i-ph:package text-base" />
-        <span>{isDockerDeploying ? 'Packaging...' : 'Deploy Docker'}</span>
+        <div className="i-ph:rocket-launch text-base" />
+        <span>{isPackaging || (deployStatus === 'deploying' && showDeployProgress) ? 'Deploying...' : 'Deploy'}</span>
       </button>
 
       {/* GitLab Deployment Dialog */}
@@ -103,15 +174,14 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
         />
       )}
 
-      {/* Docker Deployment Dialog */}
-      {showDockerDeploymentDialog && dockerDeploymentFiles && (
-        <DockerDeploymentDialog
-          isOpen={showDockerDeploymentDialog}
-          onClose={() => setShowDockerDeploymentDialog(false)}
-          projectName={dockerProjectName}
-          files={dockerDeploymentFiles}
-          dockerfile={dockerDockerfile}
-          dockerCompose={dockerCompose}
+      {/* One-click Deploy Progress Dialog */}
+      {showDeployProgress && (
+        <DeployProgressDialog
+          isOpen={showDeployProgress}
+          onClose={() => setShowDeployProgress(false)}
+          status={deployStatus}
+          log={deployLog}
+          appUrl={deployedAppUrl}
         />
       )}
     </>

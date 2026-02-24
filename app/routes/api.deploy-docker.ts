@@ -10,9 +10,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const body = await request.json<{
-      action: 'package' | 'build';
+      action: 'package' | 'build' | 'fly-deploy';
       imageName: string;
       files: Record<string, string>;
+      flyAppName?: string;
+      flyRegion?: string;
     }>();
 
     const { action: deployAction, imageName, files } = body;
@@ -25,9 +27,14 @@ export async function action({ request }: ActionFunctionArgs) {
       return handlePackage(imageName, files);
     } else if (deployAction === 'build') {
       return handleBuild(imageName, files);
+    } else if (deployAction === 'fly-deploy') {
+      const flyAppName = body.flyAppName || imageName.replace(/[/:]/g, '-');
+      const flyRegion = body.flyRegion || 'iad';
+
+      return handleFlyDeploy(imageName, files, flyAppName, flyRegion);
     }
 
-    return json({ error: 'Invalid action. Use "package" or "build".' }, { status: 400 });
+    return json({ error: 'Invalid action. Use "package", "build", or "fly-deploy".' }, { status: 400 });
   } catch (error) {
     logger.error('Deploy docker error:', error);
     return json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
@@ -261,4 +268,227 @@ function createTarHeader(fileName: string, fileSize: number): Uint8Array {
   header.set(encoder.encode(checksumOctal), 148);
 
   return header;
+}
+
+/**
+ * Generates a fly.toml configuration for Fly.io deployment.
+ */
+function generateFlyToml(appName: string, port: number): string {
+  return `# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "${appName}"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = ${port}
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
+`;
+}
+
+/**
+ * Detects the internal port from the Dockerfile EXPOSE directive.
+ */
+function detectPortFromDockerfile(dockerfile: string): number {
+  const match = dockerfile.match(/EXPOSE\s+(\d+)/);
+  return match ? parseInt(match[1], 10) : 3000;
+}
+
+/**
+ * Deploys the application to Fly.io using flyctl.
+ * Pipeline: write files to temp dir → generate fly.toml → `fly deploy`
+ * Requires flyctl to be installed on the host.
+ * Streams deployment output back to the client.
+ */
+async function handleFlyDeploy(
+  imageName: string,
+  files: Record<string, string>,
+  flyAppName: string,
+  flyRegion: string,
+): Promise<Response> {
+  try {
+    const { writeFile, mkdir, rm } = await import('node:fs/promises');
+    const { join, dirname } = await import('node:path');
+    const { spawn, execSync } = await import('node:child_process');
+    const { tmpdir } = await import('node:os');
+
+    // Verify flyctl is available
+    try {
+      execSync('flyctl version', { stdio: 'pipe' });
+    } catch {
+      return new Response(
+        JSON.stringify({
+          error: 'flyctl is not installed or not in PATH. Install it from https://fly.io/docs/flyctl/install/',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const buildDir = join(tmpdir(), `bolt-fly-deploy-${Date.now()}`);
+    await mkdir(buildDir, { recursive: true });
+
+    // Detect port from Dockerfile
+    const dockerfile = files.Dockerfile || '';
+    const port = detectPortFromDockerfile(dockerfile);
+
+    // Generate fly.toml if not already present
+    if (!files['fly.toml']) {
+      files['fly.toml'] = generateFlyToml(flyAppName, port);
+    }
+
+    // Write all files to the temp directory
+    for (const [filePath, content] of Object.entries(files)) {
+      const fullPath = join(buildDir, filePath);
+      const dir = dirname(fullPath);
+
+      if (dir && dir !== buildDir) {
+        await mkdir(dir, { recursive: true });
+      }
+
+      await writeFile(fullPath, content, 'utf-8');
+    }
+
+    // Stream the deployment: first try to create the app, then deploy
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+
+        const log = (msg: string) => controller.enqueue(encoder.encode(msg));
+
+        try {
+          // Step 1: Try to create the Fly app (ignore if it already exists)
+          log(`[1/3] Creating Fly.io app "${flyAppName}" in region "${flyRegion}"...\n`);
+
+          await new Promise<void>((resolve) => {
+            const createApp = spawn('flyctl', ['apps', 'create', flyAppName, '--org', 'personal', '-y'], {
+              cwd: buildDir,
+              stdio: ['ignore', 'pipe', 'pipe'],
+              shell: true,
+            });
+
+            createApp.stdout.on('data', (data: Buffer) => log(data.toString()));
+            createApp.stderr.on('data', (data: Buffer) => {
+              const msg = data.toString();
+
+              // "already exists" is fine - not an error
+              if (!msg.includes('already exists')) {
+                log(msg);
+              } else {
+                log(`App "${flyAppName}" already exists, reusing it.\n`);
+              }
+            });
+            createApp.on('close', () => resolve());
+            createApp.on('error', () => resolve());
+          });
+
+          // Step 2: Deploy using flyctl deploy (builds Docker image remotely on Fly builders)
+          log(`\n[2/3] Deploying to Fly.io (this builds the Docker image on Fly's remote builders)...\n`);
+          log(`       Using Dockerfile from project.\n\n`);
+
+          let deployOutput = '';
+
+          await new Promise<void>((resolve, reject) => {
+            const deploy = spawn(
+              'flyctl',
+              ['deploy', '.', '--app', flyAppName, '--primary-region', flyRegion, '--remote-only', '--ha=false', '-y'],
+              {
+                cwd: buildDir,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                shell: true,
+              },
+            );
+
+            deploy.stdout.on('data', (data: Buffer) => {
+              const text = data.toString();
+              deployOutput += text;
+              log(text);
+            });
+
+            deploy.stderr.on('data', (data: Buffer) => {
+              const text = data.toString();
+              deployOutput += text;
+              log(text);
+            });
+
+            deploy.on('close', (code: number | null) => {
+              /*
+               * flyctl can exit 0 even when it just prints usage help.
+               * Verify the output contains actual deployment indicators.
+               */
+              const actuallyDeployed =
+                deployOutput.includes('has been deployed') ||
+                deployOutput.includes('deployed successfully') ||
+                deployOutput.includes('Machines are starting') ||
+                deployOutput.includes('Visit your newly deployed app');
+
+              if (code === 0 && actuallyDeployed) {
+                resolve();
+              } else if (code === 0 && !actuallyDeployed) {
+                reject(new Error('flyctl exited but deployment did not complete. Check the log above for details.'));
+              } else {
+                reject(new Error(`flyctl deploy exited with code ${code}`));
+              }
+            });
+
+            deploy.on('error', (err: Error) => reject(err));
+          });
+
+          // Step 3: Get the app URL
+          log(`\n[3/3] Deployment complete!\n`);
+          log(`\n✓ App deployed successfully to Fly.io\n`);
+          log(`  URL: https://${flyAppName}.fly.dev\n`);
+          log(`  Dashboard: https://fly.io/apps/${flyAppName}\n`);
+          log(`\n  To check status: flyctl status --app ${flyAppName}\n`);
+          log(`  To view logs:    flyctl logs --app ${flyAppName}\n`);
+        } catch (err) {
+          log(`\n✗ Deployment failed: ${err instanceof Error ? err.message : 'Unknown error'}\n`);
+          log(`\nTroubleshooting:\n`);
+          log(`  1. Run "flyctl auth login" to ensure you're authenticated\n`);
+          log(`  2. Run "flyctl apps list" to check your apps\n`);
+          log(`  3. Check your Dockerfile for build errors\n`);
+        } finally {
+          // Clean up temp directory
+          try {
+            await rm(buildDir, { recursive: true, force: true });
+          } catch {
+            // Ignore cleanup errors
+          }
+
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } catch (error) {
+    logger.error('Fly.io deploy failed:', error);
+
+    const message =
+      error instanceof Error && error.message.includes('Cannot find module')
+        ? 'Fly.io deploy requires a Node.js runtime. This feature is not available in edge/serverless deployments.'
+        : error instanceof Error
+          ? error.message
+          : 'Fly.io deployment failed';
+
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }

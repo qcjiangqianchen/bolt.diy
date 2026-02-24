@@ -161,10 +161,48 @@ export async function streamText(props: {
   const systemMessage = chatMode === 'build' ? systemPrompt : discussPrompt();
 
   // Add forced artifact usage reminder at the end of system prompt for build mode
+  const isFirstMessage = processedMessages.length <= 1;
+  const hasExistingProject = contextFiles && Object.keys(contextFiles).length > 0;
+
+  const clarificationBlock =
+    isFirstMessage && !hasExistingProject
+      ? `
+FIRST MESSAGE BEHAVIOR — CLARIFICATION PHASE:
+When the user sends their FIRST message describing a new project, do NOT immediately generate code.
+Instead, respond with:
+1. A brief, enthusiastic acknowledgment of what they want to build (1-2 sentences).
+2. Then ask 3-5 targeted clarifying questions to understand their preferences. Format them as a numbered list with labeled options. Cover topics like:
+   - Visual style / design direction (modern, minimal, bold, playful, etc.)
+   - Key features or sections they want
+   - Content detail level (brief overview vs. rich detailed content)
+   - Interactive elements (animations, hover effects, static)
+   - Tech preferences if relevant (static HTML, React, etc.)
+3. Keep questions concise with clear a/b/c options so the user can reply quickly (e.g. "1. a, 2. c, 3. b").
+4. Do NOT include any <boltArtifact> tags in your clarification response.
+5. Once the user replies with their preferences, THEN generate the full project with <boltArtifact> incorporating all their choices.
+
+Example clarification response:
+"That sounds great! A tennis hub with sport info, events, and season highlights — let's make it shine.
+
+Before I start building, a few quick questions:
+
+1. **Visual Style** — What feel should the page have? a. Modern & sleek with dark theme b. Clean & bright with white space c. Bold & colorful with vibrant accents d. Sports magazine editorial style
+
+2. **Images** — Should I include images? a. Yes, professional stock photos b. Placeholder areas for your own images c. No images, text-focused
+
+3. **Interactive Elements** — How interactive? a. Animations, hover effects, and smooth transitions b. Subtle hover effects only c. Static, clean design
+
+4. **Tech Stack** — What framework? a. Static HTML/CSS/JS (simplest) b. React with Vite (component-based) c. You decide based on what's best
+
+Just reply with your choices (e.g. '1. a, 2. a, 3. a, 4. b') and I'll build it!"
+
+`
+      : '';
+
   const finalSystemMessage =
     chatMode === 'build'
       ? `${systemMessage}
-
+${clarificationBlock}
 RESPONSE FORMAT:
 You MUST be conversational and informative. Structure your response like this:
 1. First, briefly explain what you're about to do (1-3 sentences). For example: "I'll create a simple tennis webpage with a hero section and player stats." or "Let me update the index.html to add a Roger Federer section below the existing content."

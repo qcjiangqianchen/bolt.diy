@@ -13,7 +13,7 @@ interface DockerDeploymentDialogProps {
   dockerCompose: string;
 }
 
-type TabId = 'configure' | 'dockerfile' | 'compose' | 'build';
+type TabId = 'configure' | 'dockerfile' | 'compose' | 'build' | 'flyio';
 
 export function DockerDeploymentDialog({
   isOpen,
@@ -32,13 +32,25 @@ export function DockerDeploymentDialog({
   const [buildLog, setBuildLog] = useState('');
   const [buildStatus, setBuildStatus] = useState<'idle' | 'building' | 'success' | 'error'>('idle');
 
+  // Fly.io state
+  const [flyAppName, setFlyAppName] = useState('');
+  const [flyRegion, setFlyRegion] = useState('iad');
+  const [isDeployingToFly, setIsDeployingToFly] = useState(false);
+  const [flyDeployLog, setFlyDeployLog] = useState('');
+  const [flyDeployStatus, setFlyDeployStatus] = useState<'idle' | 'deploying' | 'success' | 'error'>('idle');
+  const [flyAppUrl, setFlyAppUrl] = useState('');
+
   useEffect(() => {
     if (isOpen) {
       setImageName(projectName);
+      setFlyAppName(projectName);
       setEditedDockerfile(dockerfile);
       setEditedDockerCompose(dockerCompose);
       setBuildLog('');
       setBuildStatus('idle');
+      setFlyDeployLog('');
+      setFlyDeployStatus('idle');
+      setFlyAppUrl('');
     }
   }, [isOpen, projectName, dockerfile, dockerCompose]);
 
@@ -169,10 +181,91 @@ export function DockerDeploymentDialog({
     }
   }, [files, editedDockerfile, editedDockerCompose, imageName, imageTag]);
 
+  /**
+   * Deploys the Docker application directly to Fly.io.
+   * Uses flyctl on the server — no Docker needed locally, Fly builds remotely.
+   */
+  const handleDeployToFly = useCallback(async () => {
+    setIsDeployingToFly(true);
+    setFlyDeployStatus('deploying');
+    setFlyDeployLog('Starting Fly.io deployment...\n');
+    setActiveTab('flyio');
+
+    try {
+      const packageFiles = { ...files };
+      packageFiles.Dockerfile = editedDockerfile;
+      packageFiles['docker-compose.yml'] = editedDockerCompose;
+
+      const response = await fetch('/api/deploy-docker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'fly-deploy',
+          imageName: `${imageName}:${imageTag}`,
+          files: packageFiles,
+          flyAppName: flyAppName || imageName,
+          flyRegion,
+        }),
+      });
+
+      if (!response.ok && response.headers.get('content-type')?.includes('application/json')) {
+        const errorData = (await response.json().catch(() => ({ error: 'Unknown error' }))) as { error?: string };
+        throw new Error(errorData.error || `Deployment failed with status ${response.status}`);
+      }
+
+      // Stream the deploy logs
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          const text = decoder.decode(value, { stream: true });
+          setFlyDeployLog((prev) => prev + text);
+        }
+      }
+
+      setFlyDeployStatus('success');
+      setFlyAppUrl(`https://${flyAppName || imageName}.fly.dev`);
+      toast.success(`Deployed to Fly.io! URL: https://${flyAppName || imageName}.fly.dev`);
+    } catch (error) {
+      console.error('Fly.io deploy failed:', error);
+      setFlyDeployStatus('error');
+      setFlyDeployLog((prev) => prev + `\nERROR: ${error instanceof Error ? error.message : 'Deployment failed'}\n`);
+      toast.error('Fly.io deployment failed');
+    } finally {
+      setIsDeployingToFly(false);
+    }
+  }, [files, editedDockerfile, editedDockerCompose, imageName, imageTag, flyAppName, flyRegion]);
+
+  const FLY_REGIONS = [
+    { value: 'iad', label: 'Ashburn, Virginia (US)' },
+    { value: 'ord', label: 'Chicago, Illinois (US)' },
+    { value: 'lax', label: 'Los Angeles, California (US)' },
+    { value: 'sea', label: 'Seattle, Washington (US)' },
+    { value: 'yyz', label: 'Toronto, Canada' },
+    { value: 'lhr', label: 'London, United Kingdom' },
+    { value: 'ams', label: 'Amsterdam, Netherlands' },
+    { value: 'fra', label: 'Frankfurt, Germany' },
+    { value: 'cdg', label: 'Paris, France' },
+    { value: 'nrt', label: 'Tokyo, Japan' },
+    { value: 'sin', label: 'Singapore' },
+    { value: 'syd', label: 'Sydney, Australia' },
+    { value: 'hkg', label: 'Hong Kong' },
+    { value: 'bom', label: 'Mumbai, India' },
+    { value: 'gru', label: 'São Paulo, Brazil' },
+  ];
+
   const tabs: { id: TabId; label: string; icon: string }[] = [
     { id: 'configure', label: 'Configure', icon: 'i-ph:gear' },
     { id: 'dockerfile', label: 'Dockerfile', icon: 'i-ph:file-code' },
     { id: 'compose', label: 'Compose', icon: 'i-ph:stack' },
+    { id: 'flyio', label: 'Fly.io', icon: 'i-ph:cloud-arrow-up' },
     { id: 'build', label: 'Build Log', icon: 'i-ph:terminal' },
   ];
 
@@ -308,6 +401,131 @@ export function DockerDeploymentDialog({
                     className="w-full h-80 px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent-500 resize-y"
                     spellCheck={false}
                   />
+                </div>
+              )}
+
+              {/* Fly.io Tab */}
+              {activeTab === 'flyio' && (
+                <div className="space-y-4">
+                  {flyDeployStatus === 'idle' ? (
+                    <>
+                      <p className="text-sm text-bolt-elements-textSecondary">
+                        Deploy your Docker application directly to Fly.io. The image will be built remotely on
+                        Fly&apos;s builders — no local Docker needed.
+                      </p>
+
+                      {/* Fly App Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+                          Fly App Name
+                        </label>
+                        <input
+                          type="text"
+                          value={flyAppName}
+                          onChange={(e) => setFlyAppName(e.target.value.replace(/[^a-z0-9-]/g, ''))}
+                          placeholder="my-app"
+                          className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <p className="mt-1 text-xs text-bolt-elements-textSecondary">
+                          Lowercase letters, numbers, and hyphens only. This becomes your URL: {flyAppName || 'my-app'}
+                          .fly.dev
+                        </p>
+                      </div>
+
+                      {/* Fly Region */}
+                      <div>
+                        <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+                          Region
+                        </label>
+                        <select
+                          value={flyRegion}
+                          onChange={(e) => setFlyRegion(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          {FLY_REGIONS.map((r) => (
+                            <option key={r.value} value={r.value}>
+                              {r.label} ({r.value})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Summary Card */}
+                      <div className="bg-bolt-elements-background-depth-2 rounded-lg p-3 space-y-1">
+                        <div className="text-xs text-bolt-elements-textSecondary">Deployment summary:</div>
+                        <div className="text-sm text-bolt-elements-textPrimary">
+                          App: <code className="text-purple-500 font-mono">{flyAppName || imageName}</code>
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary">
+                          Region:{' '}
+                          <code className="text-purple-500 font-mono">
+                            {FLY_REGIONS.find((r) => r.value === flyRegion)?.label || flyRegion}
+                          </code>
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary">
+                          URL:{' '}
+                          <code className="text-purple-500 font-mono">https://{flyAppName || imageName}.fly.dev</code>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleDeployToFly}
+                        disabled={!flyAppName || isDeployingToFly}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="i-ph:cloud-arrow-up text-base" />
+                        Deploy to Fly.io
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Deploy status header */}
+                      <div className="flex items-center gap-2 mb-2">
+                        {flyDeployStatus === 'deploying' && (
+                          <div className="flex items-center gap-1.5 text-purple-500 text-sm">
+                            <div className="i-ph:spinner animate-spin" />
+                            Deploying to Fly.io...
+                          </div>
+                        )}
+                        {flyDeployStatus === 'success' && (
+                          <div className="flex items-center gap-1.5 text-green-500 text-sm">
+                            <div className="i-ph:check-circle" />
+                            Deployed successfully!
+                            {flyAppUrl && (
+                              <a
+                                href={flyAppUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 text-purple-500 underline hover:text-purple-400"
+                              >
+                                Open app &rarr;
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        {flyDeployStatus === 'error' && (
+                          <div className="flex items-center gap-1.5 text-red-500 text-sm">
+                            <div className="i-ph:warning-circle" />
+                            Deployment failed
+                            <button
+                              onClick={() => {
+                                setFlyDeployStatus('idle');
+                                setFlyDeployLog('');
+                              }}
+                              className="ml-2 text-xs text-bolt-elements-textSecondary underline hover:text-bolt-elements-textPrimary"
+                            >
+                              Try again
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Deploy log */}
+                      <pre className="w-full h-80 px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-black text-green-400 text-xs font-mono overflow-auto whitespace-pre-wrap">
+                        {flyDeployLog || 'Deploy output will appear here...'}
+                      </pre>
+                    </>
+                  )}
                 </div>
               )}
 
