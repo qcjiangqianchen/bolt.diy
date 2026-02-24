@@ -1,98 +1,26 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText } from '~/lib/.server/llm/stream-text';
-import type { IProviderSetting, ProviderInfo } from '~/types/model';
 import { generateText } from 'ai';
-import { PROVIDER_LIST } from '~/utils/constants';
-import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel } from '~/lib/.server/llm/constants';
-import { LLMManager } from '~/lib/modules/llm/manager';
-import type { ModelInfo } from '~/lib/modules/llm/types';
-import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
+import { MAX_TOKENS, isReasoningModel } from '~/lib/.server/llm/constants';
+import { getModel } from '~/lib/.server/llm/model-factory';
 import { createScopedLogger } from '~/utils/logger';
 
 export async function action(args: ActionFunctionArgs) {
   return llmCallAction(args);
 }
 
-async function getModelList(options: {
-  apiKeys?: Record<string, string>;
-  providerSettings?: Record<string, IProviderSetting>;
-  serverEnv?: Record<string, string>;
-}) {
-  const llmManager = LLMManager.getInstance(import.meta.env);
-  return llmManager.updateModelList(options);
-}
-
 const logger = createScopedLogger('api.llmcall');
 
-function getCompletionTokenLimit(modelDetails: ModelInfo): number {
-  // 1. If model specifies completion tokens, use that
-  if (modelDetails.maxCompletionTokens && modelDetails.maxCompletionTokens > 0) {
-    return modelDetails.maxCompletionTokens;
-  }
-
-  // 2. Use provider-specific default
-  const providerDefault = PROVIDER_COMPLETION_LIMITS[modelDetails.provider];
-
-  if (providerDefault) {
-    return providerDefault;
-  }
-
-  // 3. Final fallback to MAX_TOKENS, but cap at reasonable limit for safety
-  return Math.min(MAX_TOKENS, 16384);
-}
-
-function validateTokenLimits(modelDetails: ModelInfo, requestedTokens: number): { valid: boolean; error?: string } {
-  const modelMaxTokens = modelDetails.maxTokenAllowed || 128000;
-  const maxCompletionTokens = getCompletionTokenLimit(modelDetails);
-
-  // Check against model's context window
-  if (requestedTokens > modelMaxTokens) {
-    return {
-      valid: false,
-      error: `Requested tokens (${requestedTokens}) exceed model's context window (${modelMaxTokens}). Please reduce your request size.`,
-    };
-  }
-
-  // Check against completion token limits
-  if (requestedTokens > maxCompletionTokens) {
-    return {
-      valid: false,
-      error: `Requested tokens (${requestedTokens}) exceed model's completion limit (${maxCompletionTokens}). Consider using a model with higher token limits.`,
-    };
-  }
-
-  return { valid: true };
-}
-
 async function llmCallAction({ context, request }: ActionFunctionArgs) {
-  const { system, message, model, provider, streamOutput } = await request.json<{
+  const { system, message, streamOutput } = await request.json<{
     system: string;
     message: string;
-    model: string;
-    provider: ProviderInfo;
+    model?: string;
+    provider?: any;
     streamOutput?: boolean;
   }>();
 
-  const { name: providerName } = provider;
-
-  // validate 'model' and 'provider' fields
-  if (!model || typeof model !== 'string') {
-    throw new Response('Invalid or missing model', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
-  }
-
-  if (!providerName || typeof providerName !== 'string') {
-    throw new Response('Invalid or missing provider', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
-  }
-
-  const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = getApiKeysFromCookie(cookieHeader);
-  const providerSettings = getProviderSettingsFromCookie(cookieHeader);
+  const serverEnv = context.cloudflare?.env as any;
 
   if (streamOutput) {
     try {
@@ -104,9 +32,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
             content: `${message}`,
           },
         ],
-        env: context.cloudflare?.env as any,
-        apiKeys,
-        providerSettings,
+        env: serverEnv,
       });
 
       return result.toDataStreamResponse();
@@ -120,7 +46,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         });
       }
 
-      // Handle token limit errors with helpful messages
       if (
         error instanceof Error &&
         (error.message?.includes('max_tokens') ||
@@ -144,41 +69,14 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
     }
   } else {
     try {
-      const models = await getModelList({ apiKeys, providerSettings, serverEnv: context.cloudflare?.env as any });
-      const modelDetails = models.find((m: ModelInfo) => m.name === model);
+      const resolved = getModel(serverEnv);
+      const dynamicMaxTokens = Math.min(MAX_TOKENS, 16384);
+      const isReasoning = isReasoningModel(resolved.modelId);
 
-      if (!modelDetails) {
-        throw new Error('Model not found');
-      }
+      logger.info(`Generating response Provider: ${resolved.providerName}, Model: ${resolved.modelId}`);
 
-      const dynamicMaxTokens = modelDetails ? getCompletionTokenLimit(modelDetails) : Math.min(MAX_TOKENS, 16384);
-
-      // Validate token limits before making API request
-      const validation = validateTokenLimits(modelDetails, dynamicMaxTokens);
-
-      if (!validation.valid) {
-        throw new Response(validation.error, {
-          status: 400,
-          statusText: 'Token Limit Exceeded',
-        });
-      }
-
-      const providerInfo = PROVIDER_LIST.find((p) => p.name === provider.name);
-
-      if (!providerInfo) {
-        throw new Error('Provider not found');
-      }
-
-      logger.info(`Generating response Provider: ${provider.name}, Model: ${modelDetails.name}`);
-
-      // DEBUG: Log reasoning model detection
-      const isReasoning = isReasoningModel(modelDetails.name);
-      logger.info(`DEBUG: Model "${modelDetails.name}" detected as reasoning model: ${isReasoning}`);
-
-      // Use maxCompletionTokens for reasoning models (o1, GPT-5), maxTokens for traditional models
       const tokenParams = isReasoning ? { maxCompletionTokens: dynamicMaxTokens } : { maxTokens: dynamicMaxTokens };
 
-      // Filter out unsupported parameters for reasoning models
       const baseParams = {
         system,
         messages: [
@@ -187,40 +85,12 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
             content: `${message}`,
           },
         ],
-        model: providerInfo.getModelInstance({
-          model: modelDetails.name,
-          serverEnv: context.cloudflare?.env as any,
-          apiKeys,
-          providerSettings,
-        }),
+        model: resolved.model,
         ...tokenParams,
         toolChoice: 'none' as const,
       };
 
-      // For reasoning models, set temperature to 1 (required by OpenAI API)
-      const finalParams = isReasoning
-        ? { ...baseParams, temperature: 1 } // Set to 1 for reasoning models (only supported value)
-        : { ...baseParams, temperature: 0 };
-
-      // DEBUG: Log final parameters
-      logger.info(
-        `DEBUG: Final params for model "${modelDetails.name}":`,
-        JSON.stringify(
-          {
-            isReasoning,
-            hasTemperature: 'temperature' in finalParams,
-            hasMaxTokens: 'maxTokens' in finalParams,
-            hasMaxCompletionTokens: 'maxCompletionTokens' in finalParams,
-            paramKeys: Object.keys(finalParams).filter((key) => !['model', 'messages', 'system'].includes(key)),
-            tokenParams,
-            finalParams: Object.fromEntries(
-              Object.entries(finalParams).filter(([key]) => !['model', 'messages', 'system'].includes(key)),
-            ),
-          },
-          null,
-          2,
-        ),
-      );
+      const finalParams = isReasoning ? { ...baseParams, temperature: 1 } : { ...baseParams, temperature: 0 };
 
       const result = await generateText(finalParams);
       logger.info(`Generated response`);
@@ -239,7 +109,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         message: error instanceof Error ? error.message : 'An unexpected error occurred',
         statusCode: (error as any).statusCode || 500,
         isRetryable: (error as any).isRetryable !== false,
-        provider: (error as any).provider || 'unknown',
+        provider: 'server',
       };
 
       if (error instanceof Error && error.message?.includes('API key')) {
@@ -258,7 +128,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         );
       }
 
-      // Handle token limit errors with helpful messages
       if (
         error instanceof Error &&
         (error.message?.includes('max_tokens') ||

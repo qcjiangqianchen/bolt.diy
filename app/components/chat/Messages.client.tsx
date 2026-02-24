@@ -9,7 +9,6 @@ import { forkChat } from '~/lib/persistence/db';
 import { toast } from 'react-toastify';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
-import type { ProviderInfo } from '~/types/model';
 
 interface MessagesProps {
   id?: string;
@@ -19,8 +18,6 @@ interface MessagesProps {
   append?: (message: Message) => void;
   chatMode?: 'discuss' | 'build';
   setChatMode?: (mode: 'discuss' | 'build') => void;
-  model?: string;
-  provider?: ProviderInfo;
   addToolResult: ({ toolCallId, result }: { toolCallId: string; result: any }) => void;
 }
 
@@ -82,8 +79,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         append={props.append}
                         chatMode={props.chatMode}
                         setChatMode={props.setChatMode}
-                        model={props.model}
-                        provider={props.provider}
                         parts={parts}
                         addToolResult={props.addToolResult}
                       />

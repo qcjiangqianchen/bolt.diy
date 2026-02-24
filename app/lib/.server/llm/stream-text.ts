@@ -1,4 +1,4 @@
-import { convertToCoreMessages, type Message } from 'ai';
+import { convertToCoreMessages, streamText as aiStreamText, type Message } from 'ai';
 import { type FileMap } from './constants';
 import { getSystemPrompt } from '~/lib/common/prompts/prompts';
 import { MODIFICATIONS_TAG_NAME, WORK_DIR } from '~/utils/constants';
@@ -8,7 +8,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { createFilesContext } from './utils';
 import { discussPrompt } from '~/lib/common/prompts/discuss-prompt';
 import type { DesignScheme } from '~/types/design-scheme';
-import { OllamaProvider } from './providers/ollama';
+import { getModel } from './model-factory';
 
 export type Messages = Message[];
 
@@ -21,6 +21,8 @@ export interface StreamingOptions {
       supabaseUrl?: string;
     };
   };
+  onStepFinish?: (event: { toolCalls: any[] }) => void;
+  onFinish?: (event: { text: string; finishReason: string; usage: any }) => void;
 }
 
 const logger = createScopedLogger('stream-text');
@@ -61,11 +63,10 @@ export async function streamText(props: {
     designScheme,
   } = props;
 
-  // Use local Ollama model - no provider routing needed
-  const ollamaBaseURL = serverEnv?.OLLAMA_API_BASE_URL || 'http://127.0.0.1:11434';
-  const ollamaModel = (serverEnv as any)?.OLLAMA_MODEL || 'qwen2.5-coder:14b';
+  // Resolve model from env-driven factory (provider-agnostic)
+  const { model, modelId, providerName } = getModel(serverEnv);
 
-  logger.info(`Using local Ollama model: ${ollamaModel} at ${ollamaBaseURL}`);
+  logger.info(`Using ${providerName} model: ${modelId}`);
 
   // Sanitize messages
   let processedMessages = messages.map((message) => {
@@ -157,14 +158,6 @@ export async function streamText(props: {
     console.log('No locked files found from any source for prompt.');
   }
 
-  // Initialize Ollama provider
-  const ollama = new OllamaProvider({
-    baseURL: ollamaBaseURL,
-    model: ollamaModel,
-  });
-
-  // Convert messages to Ollama format
-  const coreMessages = convertToCoreMessages(processedMessages as any);
   const systemMessage = chatMode === 'build' ? systemPrompt : discussPrompt();
 
   // Add forced artifact usage reminder at the end of system prompt for build mode
@@ -240,216 +233,22 @@ NEVER use echo commands or npm start without a package.json. ALWAYS use <boltAct
 `
       : systemMessage;
 
-  // Log first 500 chars of system prompt to verify it's correct
   logger.info(`[stream-text] System prompt first 500 chars: ${finalSystemMessage.substring(0, 500)}`);
   logger.info(`[stream-text] Chat mode: ${chatMode}`);
 
-  const formattedMessages = [
-    { role: 'system' as const, content: finalSystemMessage },
-    ...coreMessages.map((msg) => ({
-      role: msg.role as 'user' | 'assistant',
-      content:
-        typeof msg.content === 'string'
-          ? msg.content
-          : msg.content.map((part) => (part.type === 'text' ? part.text : '')).join(''),
-    })),
-  ];
+  // Convert messages to core format for the AI SDK
+  const coreMessages = convertToCoreMessages(processedMessages as any);
 
-  // Create a shared async generator that buffers chunks
-  const chunks: string[] = [];
-  let streamComplete = false;
-  let streamError: Error | null = null;
+  // Use the AI SDK's streamText — works with any provider returned by getModel()
+  const result = aiStreamText({
+    model,
+    system: finalSystemMessage,
+    messages: coreMessages,
+    temperature: 0.7,
+    maxTokens: 8192,
+    ...(options?.onStepFinish ? { onStepFinish: options.onStepFinish } : {}),
+    ...(options?.onFinish ? { onFinish: options.onFinish } : {}),
+  });
 
-  // Start the Ollama stream immediately and buffer chunks
-  void (async () => {
-    try {
-      logger.info('[stream-text] Starting Ollama stream');
-
-      let chunkCount = 0;
-      const startTime = Date.now();
-      let foundArtifactStart = false;
-      let accumulatedText = '';
-
-      for await (const chunk of ollama.streamChat(formattedMessages)) {
-        // Accumulate text to check for artifact start
-        accumulatedText += chunk;
-
-        // If we haven't found the artifact start yet, check if it's in the accumulated text
-        if (!foundArtifactStart) {
-          const artifactIndex = accumulatedText.indexOf('<boltArtifact');
-
-          if (artifactIndex >= 0) {
-            // Found it! Discard everything before it and start buffering from the artifact
-            foundArtifactStart = true;
-
-            const artifactStart = accumulatedText.substring(artifactIndex);
-
-            if (artifactStart) {
-              chunks.push(artifactStart);
-              chunkCount++;
-            }
-
-            accumulatedText = ''; // Clear accumulated text
-            logger.info('[stream-text] Found artifact start, discarded preamble text');
-          }
-
-          // If not found yet, continue accumulating
-          continue;
-        }
-
-        // Once we've found the artifact start, buffer all subsequent chunks
-        chunks.push(chunk);
-        chunkCount++;
-
-        // Log every 10 chunks
-        if (chunkCount % 10 === 0) {
-          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-          logger.info(`[stream-text] Received ${chunkCount} chunks (${elapsed}s)`);
-        }
-      }
-
-      streamComplete = true;
-
-      const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-      logger.info(`[stream-text] Ollama stream complete, ${chunks.length} chunks in ${totalTime}s`);
-
-      // Log the complete response to debug
-      const fullResponse = chunks.join('');
-      logger.info(`[stream-text] Full response length: ${fullResponse.length} chars`);
-      logger.info(`[stream-text] Response starts with: ${fullResponse.substring(0, 100)}`);
-
-      if (fullResponse.includes('<boltArtifact')) {
-        logger.info('[stream-text] Response contains <boltArtifact> tag');
-      } else {
-        logger.error('[stream-text] Response does NOT contain <boltArtifact> tag!');
-      }
-    } catch (error) {
-      streamError = error instanceof Error ? error : new Error(String(error));
-      logger.error('[stream-text] Ollama stream error:', streamError);
-    }
-  })();
-
-  // Generator for fullStream that yields buffered chunks with proper type
-  async function* fullStreamGenerator() {
-    let index = 0;
-
-    while (!streamComplete || index < chunks.length) {
-      // Wait for new chunks
-      while (index >= chunks.length && !streamComplete && !streamError) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-
-      // Yield available chunks
-      while (index < chunks.length) {
-        yield {
-          type: 'text-delta' as const,
-          textDelta: chunks[index],
-        };
-        index++;
-      }
-
-      // Check for errors
-      if (streamError) {
-        yield {
-          type: 'error' as const,
-          error: streamError,
-        };
-        break;
-      }
-
-      // Exit if complete
-      if (streamComplete && index >= chunks.length) {
-        break;
-      }
-    }
-  }
-
-  return {
-    fullStream: fullStreamGenerator(),
-    mergeIntoDataStream(dataStream: any) {
-      // Return a promise so the caller can await the streaming to complete
-      return new Promise<void>((resolve, reject) => {
-        (async () => {
-          try {
-            let index = 0;
-
-            while (!streamComplete || index < chunks.length) {
-              // Wait for new chunks
-              while (index >= chunks.length && !streamComplete && !streamError) {
-                await new Promise((r) => setTimeout(r, 10));
-              }
-
-              // Write chunks using DataStreamWriter.write() method
-              while (index < chunks.length) {
-                const chunk = chunks[index];
-
-                // DataStreamWriter.write() expects DataStreamString format: "0:text\n"
-                const formatted = `0:${JSON.stringify(chunk)}\n`;
-                dataStream.write(formatted);
-                index++;
-              }
-
-              // Check for errors
-              if (streamError) {
-                logger.error('[stream-text] Stream error:', streamError);
-                reject(streamError);
-
-                return;
-              }
-
-              // Exit if complete
-              if (streamComplete && index >= chunks.length) {
-                logger.info(`[stream-text] Finished merging ${index} chunks`);
-                resolve();
-
-                return;
-              }
-            }
-          } catch (err) {
-            logger.error('[stream-text] Error in mergeIntoDataStream:', err);
-            reject(err);
-          }
-        })();
-      });
-    },
-    toDataStreamResponse: () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        async start(controller) {
-          let index = 0;
-
-          while (!streamComplete || index < chunks.length) {
-            // Wait for new chunks
-            while (index >= chunks.length && !streamComplete && !streamError) {
-              await new Promise((resolve) => setTimeout(resolve, 10));
-            }
-
-            // Enqueue chunks in AI SDK protocol format: 0:"text"\n
-            while (index < chunks.length) {
-              const formatted = `0:${JSON.stringify(chunks[index])}\n`;
-              controller.enqueue(encoder.encode(formatted));
-              index++;
-            }
-
-            if (streamError) {
-              controller.error(streamError);
-              return;
-            }
-
-            if (streamComplete && index >= chunks.length) {
-              controller.close();
-              return;
-            }
-          }
-        },
-      });
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'X-Vercel-AI-Data-Stream': 'v1',
-        },
-      });
-    },
-  };
+  return result;
 }

@@ -8,7 +8,6 @@ import { createScopedLogger } from '~/utils/logger';
 import { getFilePaths } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
 import { WORK_DIR } from '~/utils/constants';
-import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { DesignScheme } from '~/types/design-scheme';
 import { MCPService } from '~/lib/services/mcpService';
 import { StreamRecoveryManager } from '~/lib/.server/llm/stream-recovery';
@@ -46,7 +45,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     maxLLMSteps?: number;
   }>();
 
-  // No need to parse API keys or provider settings for local model
   const stream = new SwitchableStream();
 
   const cumulativeUsage = {
@@ -80,21 +78,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         }
 
         if (filePaths.length > 0 && contextOptimization) {
-          // Skip summary generation for local Ollama - not needed
-          logger.debug('Skipping chat summary generation for local model');
+          logger.debug('Skipping chat summary generation — using all files as context');
           summary = undefined;
-
-          // Only write annotation if summary exists
-          if (summary) {
-            dataStream.writeMessageAnnotation({
-              type: 'chatSummary',
-              summary,
-              chatId: processedMessages.slice(-1)?.[0]?.id,
-            } as ContextAnnotation);
-          }
-
-          // Skip AI-based context selection - just use all files for local model
-          logger.debug('Using all files as context (skipping AI-based selection for local model)');
           filteredFiles = files;
 
           if (filteredFiles) {
@@ -121,14 +106,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             order: progressCounter++,
             message: 'Code Files Selected',
           } satisfies ProgressAnnotation);
-
-          // logger.debug('Code Files Selected');
         }
 
         const options: any = {
           supabaseConnection: supabase,
           onStepFinish: ({ toolCalls }: { toolCalls: any[] }) => {
-            // add tool call annotations for frontend processing
             toolCalls.forEach((toolCall: any) => {
               mcpService.processToolCall(toolCall, dataStream);
             });
@@ -160,7 +142,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
 
-              // stream.close();
               return;
             }
 
@@ -172,13 +153,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
-            const lastUserMessage = processedMessages.filter((x) => x.role == 'user').slice(-1)[0];
-            const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
+            // Continue the conversation — model/provider are resolved from env, no need to extract from message
             processedMessages.push({ id: generateId(), role: 'assistant', content });
             processedMessages.push({
               id: generateId(),
               role: 'user',
-              content: `[Model: ${model}]\n\n[Provider: ${provider}]\n\n${CONTINUE_PROMPT}`,
+              content: CONTINUE_PROMPT,
             });
 
             const result = await streamText({
@@ -250,14 +230,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           streamRecovery.stop();
         })();
 
-        // Merge the Ollama stream into the data stream and wait for completion
+        // Merge the stream into the data stream
         await result.mergeIntoDataStream(dataStream);
 
         // Wait for error monitor to complete
         await errorMonitor;
       },
       onError: (error: any) => {
-        // Provide more specific error messages for common issues
         const errorMessage = error.message || 'Unknown error';
 
         if (errorMessage.includes('model') && errorMessage.includes('not found')) {
@@ -265,7 +244,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         }
 
         if (errorMessage.includes('Invalid JSON response')) {
-          return 'Custom error: The AI service returned an invalid response. This may be due to an invalid model name, API rate limiting, or server issues. Try selecting a different model or check your API key.';
+          return 'Custom error: The AI service returned an invalid response. This may be due to an invalid model name, API rate limiting, or server issues.';
         }
 
         if (
@@ -277,7 +256,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         }
 
         if (errorMessage.includes('token') && errorMessage.includes('limit')) {
-          return 'Custom error: Token limit exceeded. The conversation is too long for the selected model. Try using a model with larger context window or start a new conversation.';
+          return 'Custom error: Token limit exceeded. The conversation is too long for the selected model.';
         }
 
         if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
@@ -321,7 +300,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             transformedChunk = `0:${content}\n`;
           }
 
-          // Convert the string stream to a byte stream
           const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
           controller.enqueue(encoder.encode(str));
         },
@@ -344,7 +322,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       error: true,
       message: error.message || 'An unexpected error occurred',
       statusCode: error.statusCode || 500,
-      isRetryable: error.isRetryable !== false, // Default to retryable unless explicitly false
+      isRetryable: error.isRetryable !== false,
       provider: error.provider || 'unknown',
     };
 

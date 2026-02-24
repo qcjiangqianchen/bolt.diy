@@ -8,14 +8,15 @@ import { useMessageParser, usePromptEnhancer, useShortcuts } from '~/lib/hooks';
 import { description, useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
+import { PROMPT_COOKIE_KEY } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat } from './BaseChat';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
-import type { ProviderInfo } from '~/types/model';
+
+// Model/provider selection removed — LLM is configured server-side via env vars
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
 
@@ -104,19 +105,11 @@ export const ChatImpl = memo(
      * );
      */
     const supabaseAlert = useStore(workbenchStore.supabaseAlert);
-    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
+    const { promptId, contextOptimizationEnabled } = useSettings();
     const [llmErrorAlert, setLlmErrorAlert] = useState<LlmErrorAlertType | undefined>(undefined);
-    const [model, setModel] = useState(() => {
-      const savedModel = Cookies.get('selectedModel');
-      return savedModel || DEFAULT_MODEL;
-    });
-    const [provider, setProvider] = useState(() => {
-      const savedProvider = Cookies.get('selectedProvider');
-      return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
-    });
     const { showChat } = useStore(chatStore);
     const [animationScope, animate] = useAnimate();
-    const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+    const [apiKeys] = useState<Record<string, string>>({});
     const [chatMode, setChatMode] = useState<'discuss' | 'build'>('build');
     const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
     const mcpSettings = useMCPStore((state) => state.settings);
@@ -168,8 +161,6 @@ export const ChatImpl = memo(
           logStore.logProvider('Chat response completed', {
             component: 'Chat',
             action: 'response',
-            model,
-            provider: provider.name,
             usage,
             messageLength: message.content.length,
           });
@@ -183,17 +174,15 @@ export const ChatImpl = memo(
     useEffect(() => {
       const prompt = searchParams.get('prompt');
 
-      // console.log(prompt, searchParams, model, provider);
-
       if (prompt) {
         setSearchParams({});
         runAnimation();
         append({
           role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
+          content: prompt,
         });
       }
-    }, [model, provider, searchParams]);
+    }, [searchParams]);
 
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
@@ -230,8 +219,6 @@ export const ChatImpl = memo(
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
         action: 'abort',
-        model,
-        provider: provider.name,
       });
     };
 
@@ -246,7 +233,7 @@ export const ChatImpl = memo(
           message: 'An unexpected error occurred',
           isRetryable: true,
           statusCode: 500,
-          provider: provider.name,
+          provider: 'server',
           type: 'unknown' as const,
           retryDelay: 0,
         };
@@ -289,7 +276,6 @@ export const ChatImpl = memo(
           context,
           retryable: errorInfo.isRetryable,
           errorType,
-          provider: provider.name,
         });
 
         // Create API error alert
@@ -297,12 +283,12 @@ export const ChatImpl = memo(
           type: 'error',
           title,
           description: errorInfo.message,
-          provider: provider.name,
+          provider: 'server',
           errorType,
         });
         setData([]);
       },
-      [provider.name, stop],
+      [stop],
     );
 
     const clearApiErrorAlert = useCallback(() => {
@@ -417,7 +403,7 @@ export const ChatImpl = memo(
         setFakeLoading(true);
 
         // Proceed with normal message
-        const userMessageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
+        const userMessageText = finalMessageContent;
         const attachments = uploadedFiles.length > 0 ? await filesToAttachments(uploadedFiles) : undefined;
 
         setMessages([
@@ -454,7 +440,7 @@ export const ChatImpl = memo(
 
       if (modifiedFiles !== undefined) {
         const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
-        const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userUpdateArtifact}${finalMessageContent}`;
+        const messageText = `${userUpdateArtifact}${finalMessageContent}`;
 
         const attachmentOptions =
           uploadedFiles.length > 0 ? { experimental_attachments: await filesToAttachments(uploadedFiles) } : undefined;
@@ -470,7 +456,7 @@ export const ChatImpl = memo(
 
         workbenchStore.resetAllFileModifications();
       } else {
-        const messageText = `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${finalMessageContent}`;
+        const messageText = finalMessageContent;
 
         const attachmentOptions =
           uploadedFiles.length > 0 ? { experimental_attachments: await filesToAttachments(uploadedFiles) } : undefined;
@@ -516,24 +502,6 @@ export const ChatImpl = memo(
       [],
     );
 
-    useEffect(() => {
-      const storedApiKeys = Cookies.get('apiKeys');
-
-      if (storedApiKeys) {
-        setApiKeys(JSON.parse(storedApiKeys));
-      }
-    }, []);
-
-    const handleModelChange = (newModel: string) => {
-      setModel(newModel);
-      Cookies.set('selectedModel', newModel, { expires: 30 });
-    };
-
-    const handleProviderChange = (newProvider: ProviderInfo) => {
-      setProvider(newProvider);
-      Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
-    };
-
     return (
       <BaseChat
         ref={animationScope}
@@ -548,11 +516,6 @@ export const ChatImpl = memo(
         enhancingPrompt={enhancingPrompt}
         promptEnhanced={promptEnhanced}
         sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={activeProviders}
         handleInputChange={(e) => {
           onTextareaChange(e);
           debouncedCachePrompt(e);
@@ -572,16 +535,10 @@ export const ChatImpl = memo(
           };
         })}
         enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
+          enhancePrompt(input, (input) => {
+            setInput(input);
+            scrollTextArea();
+          });
         }}
         uploadedFiles={uploadedFiles}
         setUploadedFiles={setUploadedFiles}

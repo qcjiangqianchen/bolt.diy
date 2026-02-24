@@ -7,7 +7,9 @@ import { logStore } from '~/lib/stores/logs';
 import { motion } from 'framer-motion';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
-import { providerBaseUrlEnvKeys } from '~/utils/constants';
+
+// Provider base URL env keys removed — LLM configured server-side
+const providerBaseUrlEnvKeys: Record<string, { baseUrlKey?: string }> = {};
 import { SiAmazon, SiGoogle, SiGithub, SiHuggingface, SiPerplexity, SiOpenai } from 'react-icons/si';
 import { BsRobot, BsCloud } from 'react-icons/bs';
 import { TbBrain, TbCloudComputing } from 'react-icons/tb';

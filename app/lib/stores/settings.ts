@@ -1,5 +1,4 @@
 import { atom, map } from 'nanostores';
-import { PROVIDER_LIST } from '~/utils/constants';
 import type { IProviderConfig } from '~/types/model';
 import type { TabVisibilityConfig, TabWindowConfig, UserTabConfig } from '~/components/@settings/core/types';
 import { DEFAULT_TAB_CONFIG } from '~/components/@settings/core/constants';
@@ -80,16 +79,15 @@ const fetchConfiguredProviders = async (): Promise<ConfiguredProvider[]> => {
 const getInitialProviderSettings = (): ProviderSetting => {
   const initialSettings: ProviderSetting = {};
 
-  // Start with default settings
-  PROVIDER_LIST.forEach((provider) => {
-    initialSettings[provider.name] = {
-      ...provider,
-      settings: {
-        // Local providers should be disabled by default
-        enabled: !LOCAL_PROVIDERS.includes(provider.name),
-      },
-    };
-  });
+  /*
+   * Provider list removed — LLM is now configured server-side via env vars.
+   * Seed with a single "Server" placeholder so the settings UI doesn't break.
+   */
+  initialSettings.Server = {
+    name: 'Server',
+    staticModels: [],
+    settings: { enabled: true },
+  } as any;
 
   // Only try to load from localStorage in the browser
   if (isBrowser) {

@@ -1,6 +1,5 @@
 import { isMac, isWindows, isLinux } from './os';
 import { isMobile } from './mobile';
-import { PROVIDER_LIST, DEFAULT_MODEL } from './constants';
 import { logger } from './logger';
 
 // Lazy import to avoid circular dependencies
@@ -855,6 +854,8 @@ class DebugLogger {
   }
 
   private _getCurrentModel(): string {
+    const DEFAULT_MODEL_FALLBACK = 'server-configured';
+
     try {
       // Try to get from localStorage or environment
       if (typeof window !== 'undefined') {
@@ -865,9 +866,9 @@ class DebugLogger {
         }
       }
 
-      return DEFAULT_MODEL;
+      return DEFAULT_MODEL_FALLBACK;
     } catch {
-      return DEFAULT_MODEL;
+      return DEFAULT_MODEL_FALLBACK;
     }
   }
 
@@ -881,9 +882,9 @@ class DebugLogger {
         }
       }
 
-      return PROVIDER_LIST[0]?.name || 'unknown';
+      return 'server';
     } catch {
-      return PROVIDER_LIST[0]?.name || 'unknown';
+      return 'server';
     }
   }
 

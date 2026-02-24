@@ -64,6 +64,10 @@ export default defineConfig((config) => {
       'OLLAMA_API_BASE_URL',
       'LMSTUDIO_API_BASE_URL',
       'TOGETHER_API_BASE_URL',
+      'LLM_PROVIDER',
+      'LLM_MODEL',
+      'LLM_BASE_URL',
+      'LLM_API_KEY',
     ],
     css: {
       preprocessorOptions: {

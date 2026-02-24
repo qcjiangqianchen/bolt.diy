@@ -6,7 +6,6 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { WORK_DIR } from '~/utils/constants';
 import WithTooltip from '~/components/ui/Tooltip';
 import type { Message } from 'ai';
-import type { ProviderInfo } from '~/types/model';
 import type {
   TextUIPart,
   ReasoningUIPart,
@@ -27,8 +26,6 @@ interface AssistantMessageProps {
   append?: (message: Message) => void;
   chatMode?: 'discuss' | 'build';
   setChatMode?: (mode: 'discuss' | 'build') => void;
-  model?: string;
-  provider?: ProviderInfo;
   parts:
     | (TextUIPart | ReasoningUIPart | ToolInvocationUIPart | SourceUIPart | FileUIPart | StepStartUIPart)[]
     | undefined;
@@ -69,8 +66,6 @@ export const AssistantMessage = memo(
     append,
     chatMode,
     setChatMode,
-    model,
-    provider,
     parts,
     addToolResult,
   }: AssistantMessageProps) => {
@@ -176,7 +171,7 @@ export const AssistantMessage = memo(
             </div>
           </div>
         </>
-        <Markdown append={append} chatMode={chatMode} setChatMode={setChatMode} model={model} provider={provider} html>
+        <Markdown append={append} chatMode={chatMode} setChatMode={setChatMode} html>
           {content}
         </Markdown>
         {toolInvocations && toolInvocations.length > 0 && (

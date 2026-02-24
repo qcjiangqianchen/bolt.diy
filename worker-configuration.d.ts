@@ -19,4 +19,11 @@ interface Env {
   XAI_API_KEY: string;
   PERPLEXITY_API_KEY: string;
   AWS_BEDROCK_CONFIG: string;
+  // Provider-agnostic LLM configuration
+  LLM_PROVIDER: string;
+  LLM_MODEL: string;
+  LLM_BASE_URL: string;
+  LLM_API_KEY: string;
+  // Legacy Ollama-specific (still supported as fallback)
+  OLLAMA_MODEL: string;
 }

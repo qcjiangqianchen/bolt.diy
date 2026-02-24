@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { ProviderInfo } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('usePromptEnhancement');
@@ -13,13 +12,7 @@ export function usePromptEnhancer() {
     setPromptEnhanced(false);
   };
 
-  const enhancePrompt = async (
-    _input: string,
-    _setInput: (value: string) => void,
-    _model: string,
-    _provider: ProviderInfo,
-    _apiKeys?: Record<string, string>,
-  ) => {
+  const enhancePrompt = async (_input: string, _setInput: (value: string) => void) => {
     // Stub - Prompt enhancement disabled
     logger.warn('Prompt enhancement is disabled');
     setEnhancingPrompt(false);

@@ -6,7 +6,9 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 import type { IProviderConfig } from '~/types/model';
 import { logStore } from '~/lib/stores/logs';
-import { providerBaseUrlEnvKeys } from '~/utils/constants';
+
+// Provider base URL env keys removed — LLM configured server-side
+const providerBaseUrlEnvKeys: Record<string, { baseUrlKey?: string }> = {};
 import { useToast } from '~/components/ui/use-toast';
 import { useLocalModelHealth } from '~/lib/hooks/useLocalModelHealth';
 import ErrorBoundary from './ErrorBoundary';

@@ -8,7 +8,6 @@ import { CodeBlock } from './CodeBlock';
 import type { Message } from 'ai';
 import styles from './Markdown.module.scss';
 import ThoughtBox from './ThoughtBox';
-import type { ProviderInfo } from '~/types/model';
 
 const logger = createScopedLogger('MarkdownComponent');
 
@@ -19,12 +18,10 @@ interface MarkdownProps {
   append?: (message: Message) => void;
   chatMode?: 'discuss' | 'build';
   setChatMode?: (mode: 'discuss' | 'build') => void;
-  model?: string;
-  provider?: ProviderInfo;
 }
 
 export const Markdown = memo(
-  ({ children, html = false, limitedMarkdown = false, append, setChatMode, model, provider }: MarkdownProps) => {
+  ({ children, html = false, limitedMarkdown = false, append, setChatMode }: MarkdownProps) => {
     logger.trace('Render');
 
     const components = useMemo(() => {
@@ -154,7 +151,7 @@ export const Markdown = memo(
                       content: [
                         {
                           type: 'text',
-                          text: `[Model: ${model}]\n\n[Provider: ${provider?.name}]\n\n${message}`,
+                          text: message,
                         },
                       ] as any,
                       role: 'user',
@@ -167,7 +164,7 @@ export const Markdown = memo(
                       content: [
                         {
                           type: 'text',
-                          text: `[Model: ${model}]\n\n[Provider: ${provider?.name}]\n\n${message}`,
+                          text: message,
                         },
                       ] as any,
                       role: 'user',
