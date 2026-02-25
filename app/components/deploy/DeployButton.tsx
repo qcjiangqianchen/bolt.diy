@@ -8,6 +8,7 @@ import { GitLabDeploymentDialog } from '~/components/deploy/GitLabDeploymentDial
 import { useDockerDeploy } from '~/components/deploy/DockerDeploy.client';
 import { DeployProgressDialog } from '~/components/deploy/DeployProgressDialog';
 import { toast } from 'react-toastify';
+import { useChatHistory, chatMetadata } from '~/lib/persistence/useChatHistory';
 
 interface DeployButtonProps {
   onGitLabDeploy?: () => Promise<void>;
@@ -24,6 +25,8 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
   const [showGitLabDeploymentDialog, setShowGitLabDeploymentDialog] = useState(false);
   const [gitlabDeploymentFiles, setGitlabDeploymentFiles] = useState<Record<string, string> | null>(null);
   const [gitlabProjectName, setGitlabProjectName] = useState('');
+  const { updateChatMestaData } = useChatHistory();
+  const currentMetadata = useStore(chatMetadata);
 
   // One-click deploy state
   const { handleDockerDeploy, isDeploying: isPackaging } = useDockerDeploy();
@@ -90,6 +93,7 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
           files: result.files,
           flyAppName,
           flyRegion: 'iad',
+          boltUrl: window.location.origin, // automatically determined — no config needed
         }),
       });
 
@@ -122,18 +126,30 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
         throw new Error('Deployment failed — check the log for details');
       }
 
-      // Step 7: Done — show the URL
+      // Step 7: Done — show the URL and persist to chat metadata
       const appUrl = `https://${flyAppName}.fly.dev`;
       setDeployedAppUrl(appUrl);
       setDeployStatus('success');
       toast.success('Application deployed successfully!');
+
+      // Persist the deployed URL in chat metadata so sidebar and analytics panel can read it
+      try {
+        await updateChatMestaData({
+          ...currentMetadata,
+          gitUrl: currentMetadata?.gitUrl || '',
+          deployedUrl: appUrl,
+          deployedAt: new Date().toISOString(),
+        });
+      } catch (metaErr) {
+        console.warn('Failed to persist deployed URL to metadata:', metaErr);
+      }
     } catch (error) {
       console.error('Deploy failed:', error);
       setDeployStatus('error');
       setDeployLog((prev) => prev + `\nERROR: ${error instanceof Error ? error.message : 'Deployment failed'}\n`);
       toast.error('Deployment failed');
     }
-  }, [handleDockerDeploy]);
+  }, [handleDockerDeploy, updateChatMestaData, currentMetadata]);
 
   return (
     <>

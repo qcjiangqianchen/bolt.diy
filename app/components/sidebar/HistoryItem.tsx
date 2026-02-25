@@ -5,6 +5,7 @@ import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
 import { forwardRef, type ForwardedRef, useCallback } from 'react';
 import { Checkbox } from '~/components/ui/Checkbox';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 interface HistoryItemProps {
   item: ChatHistoryItem;
@@ -117,6 +118,36 @@ export function HistoryItem({
             )}
           >
             <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Deployed app action buttons */}
+              {item.metadata?.deployedUrl && (
+                <>
+                  <ChatActionButton
+                    toolTipContent="View App"
+                    icon="i-ph:globe h-4 w-4"
+                    className="hover:text-blue-500 dark:hover:text-blue-400"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      window.open(item.metadata!.deployedUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                  />
+                  <ChatActionButton
+                    toolTipContent="View Analytics"
+                    icon="i-ph:chart-bar h-4 w-4"
+                    className="hover:text-purple-500 dark:hover:text-purple-400"
+                    onClick={(event) => {
+                      event.preventDefault();
+
+                      // If already on this chat, just switch the view; otherwise navigate
+                      if (isActiveChat) {
+                        workbenchStore.showWorkbench.set(true);
+                        workbenchStore.currentView.set('analytics');
+                      } else {
+                        window.location.href = `/chat/${item.urlId}?view=analytics`;
+                      }
+                    }}
+                  />
+                </>
+              )}
               <ChatActionButton
                 toolTipContent="Export"
                 icon="i-ph:download-simple h-4 w-4"

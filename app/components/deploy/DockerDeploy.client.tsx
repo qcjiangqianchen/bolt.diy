@@ -15,6 +15,11 @@ interface ProjectDetection {
   buildOutputDir: string;
   nodeVersion: string;
   packageManager: 'npm' | 'yarn' | 'pnpm';
+
+  // Whether the actual lock file exists in the project
+  hasNpmLock: boolean;
+  hasYarnLock: boolean;
+  hasPnpmLock: boolean;
 }
 
 /**
@@ -30,6 +35,9 @@ function detectProject(files: Record<string, string>): ProjectDetection {
     buildOutputDir: 'dist',
     nodeVersion: '20',
     packageManager: 'npm',
+    hasNpmLock: false,
+    hasYarnLock: false,
+    hasPnpmLock: false,
   };
 
   // Check for package.json (Node.js project)
@@ -87,11 +95,15 @@ function detectProject(files: Record<string, string>): ProjectDetection {
       // Ignore parse errors, use defaults
     }
 
-    // Detect package manager
+    // Detect package manager and whether the lock file actually exists
     if (files['pnpm-lock.yaml']) {
       result.packageManager = 'pnpm';
+      result.hasPnpmLock = true;
     } else if (files['yarn.lock']) {
       result.packageManager = 'yarn';
+      result.hasYarnLock = true;
+    } else if (files['package-lock.json']) {
+      result.hasNpmLock = true;
     }
   }
 
@@ -117,14 +129,33 @@ function detectProject(files: Record<string, string>): ProjectDetection {
 function generateDockerfile(detection: ProjectDetection): string {
   switch (detection.type) {
     case 'node': {
+      /*
+       * Only copy the lockfile when it actually exists in the project.
+       * Fall back from `npm ci` (requires lockfile) to `npm install` when absent.
+       */
+      const hasLockfile =
+        detection.packageManager === 'pnpm'
+          ? detection.hasPnpmLock
+          : detection.packageManager === 'yarn'
+            ? detection.hasYarnLock
+            : detection.hasNpmLock;
+
       const installCmd =
         detection.packageManager === 'pnpm'
-          ? 'corepack enable && pnpm install --frozen-lockfile'
+          ? hasLockfile
+            ? 'corepack enable && pnpm install --frozen-lockfile'
+            : 'corepack enable && pnpm install'
           : detection.packageManager === 'yarn'
-            ? 'yarn install --frozen-lockfile'
-            : 'npm ci';
-      const copyLockfile =
-        detection.packageManager === 'pnpm'
+            ? hasLockfile
+              ? 'yarn install --frozen-lockfile'
+              : 'yarn install'
+            : hasLockfile
+              ? 'npm ci'
+              : 'npm install';
+
+      const copyLockfile = !hasLockfile
+        ? '' // no lockfile — skip COPY entirely
+        : detection.packageManager === 'pnpm'
           ? 'COPY pnpm-lock.yaml ./'
           : detection.packageManager === 'yarn'
             ? 'COPY yarn.lock ./'
@@ -138,8 +169,7 @@ WORKDIR /app
 
 # Copy dependency manifests
 COPY package.json ./
-${copyLockfile}
-
+${copyLockfile ? copyLockfile + '\n' : ''}
 # Install dependencies
 RUN ${installCmd}
 
@@ -155,11 +185,13 @@ FROM node:${detection.nodeVersion}-alpine AS production
 WORKDIR /app
 
 ENV NODE_ENV=production
+# Bind to all interfaces so Fly.io / Docker can reach the app
+ENV HOST=0.0.0.0
+ENV PORT=3000
 
 # Copy dependency manifests
 COPY package.json ./
-${copyLockfile}
-
+${copyLockfile ? copyLockfile + '\n' : ''}
 # Install production-only dependencies
 RUN ${installCmd} --production
 
@@ -179,10 +211,14 @@ CMD ["sh", "-c", "${detection.startCommand}"]
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+# Bind to all interfaces so Fly.io / Docker can reach the app
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
 # Copy dependency manifests
 COPY package.json ./
-${copyLockfile}
-
+${copyLockfile ? copyLockfile + '\n' : ''}
 # Install dependencies
 RUN ${installCmd}
 

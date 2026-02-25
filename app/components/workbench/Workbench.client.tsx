@@ -19,10 +19,13 @@ import { cubicEasingFn } from '~/utils/easings';
 import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
+import { AnalyticsPanel } from './AnalyticsPanel';
 import useViewport from '~/lib/hooks';
+import { useSearchParams } from '@remix-run/react';
 
 import { usePreviewStore } from '~/lib/stores/previews';
 import { chatStore } from '~/lib/stores/chat';
+import { chatMetadata } from '~/lib/persistence/useChatHistory';
 import type { ElementInfo } from './Inspector';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { useChatHistory } from '~/lib/persistence';
@@ -284,6 +287,10 @@ export const Workbench = memo(
     const selectedView = useStore(workbenchStore.currentView);
     const { showChat } = useStore(chatStore);
     const canHideChat = showWorkbench || !showChat;
+    const currentMeta = useStore(chatMetadata);
+    const isDeployed = Boolean(currentMeta?.deployedUrl);
+
+    const [searchParams] = useSearchParams();
 
     const isSmallViewport = useViewport(1024);
     const streaming = useStore(streamingState);
@@ -293,6 +300,14 @@ export const Workbench = memo(
     const setSelectedView = (view: WorkbenchViewType) => {
       workbenchStore.currentView.set(view);
     };
+
+    // Auto-open analytics view when ?view=analytics is in the URL
+    useEffect(() => {
+      if (searchParams.get('view') === 'analytics' && isDeployed) {
+        workbenchStore.showWorkbench.set(true);
+        workbenchStore.currentView.set('analytics');
+      }
+    }, [searchParams, isDeployed]);
 
     useEffect(() => {
       if (hasPreview) {
@@ -380,6 +395,22 @@ export const Workbench = memo(
                       To restore Code/Diff/Preview tabs, uncomment the Slider below. */}
                 {/* <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} /> */}
                 <span className="text-sm font-medium text-bolt-elements-textPrimary">Preview</span>
+                {/* Analytics toggle — only shown when the chat has a deployed app */}
+                {isDeployed && (
+                  <button
+                    onClick={() => setSelectedView(selectedView === 'analytics' ? 'preview' : 'analytics')}
+                    className={classNames(
+                      'flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ml-1',
+                      selectedView === 'analytics'
+                        ? 'bg-purple-500/20 text-purple-500 border border-purple-500/30'
+                        : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary border border-transparent',
+                    )}
+                    title="Toggle Analytics Panel"
+                  >
+                    <span className="i-ph:chart-bar text-sm" />
+                    Analytics
+                  </button>
+                )}
                 <div className="ml-auto" />
                 {/* Export and Sync buttons always visible */}
                 <div className="flex overflow-y-auto">
@@ -475,6 +506,9 @@ export const Workbench = memo(
                 </View>
                 <View initial={{ x: '100%' }} animate={{ x: selectedView === 'preview' ? '0%' : '100%' }}>
                   <Preview setSelectedElement={setSelectedElement} />
+                </View>
+                <View initial={{ x: '100%' }} animate={{ x: selectedView === 'analytics' ? '0%' : '100%' }}>
+                  <AnalyticsPanel />
                 </View>
               </div>
             </div>

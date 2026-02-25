@@ -15,6 +15,7 @@ export async function action({ request }: ActionFunctionArgs) {
       files: Record<string, string>;
       flyAppName?: string;
       flyRegion?: string;
+      boltUrl?: string;
     }>();
 
     const { action: deployAction, imageName, files } = body;
@@ -30,8 +31,9 @@ export async function action({ request }: ActionFunctionArgs) {
     } else if (deployAction === 'fly-deploy') {
       const flyAppName = body.flyAppName || imageName.replace(/[/:]/g, '-');
       const flyRegion = body.flyRegion || 'iad';
+      const boltUrl = body.boltUrl;
 
-      return handleFlyDeploy(imageName, files, flyAppName, flyRegion);
+      return handleFlyDeploy(imageName, files, flyAppName, flyRegion, boltUrl);
     }
 
     return json({ error: 'Invalid action. Use "package", "build", or "fly-deploy".' }, { status: 400 });
@@ -281,6 +283,12 @@ primary_region = "iad"
 
 [build]
 
+# Ensure the app binds on 0.0.0.0 so Fly's load balancer can reach it.
+# Many frameworks (Vite, Next.js, etc.) default to 127.0.0.1 in production.
+[env]
+  HOST = "0.0.0.0"
+  PORT = "${port}"
+
 [http_service]
   internal_port = ${port}
   force_https = true
@@ -315,6 +323,7 @@ async function handleFlyDeploy(
   files: Record<string, string>,
   flyAppName: string,
   flyRegion: string,
+  boltUrl?: string,
 ): Promise<Response> {
   try {
     const { writeFile, mkdir, rm } = await import('node:fs/promises');
@@ -347,6 +356,22 @@ async function handleFlyDeploy(
     // Generate fly.toml if not already present
     if (!files['fly.toml']) {
       files['fly.toml'] = generateFlyToml(flyAppName, port);
+    }
+
+    /*
+     * Inject analytics tracker into index.html using the bolt.diy origin URL
+     * boltUrl comes from window.location.origin in the browser — no configuration needed
+     */
+    if (boltUrl && files['index.html']) {
+      const trackerScript = `<script>(function(){var _boltApp=${JSON.stringify(flyAppName)},_boltUrl=${JSON.stringify(boltUrl.replace(/\/$/, ''))};function _boltTrack(p){try{fetch(_boltUrl+'/api/analytics?app='+encodeURIComponent(_boltApp)+'&path='+encodeURIComponent(p||'/')+'&sid='+(sessionStorage._boltSid||(sessionStorage._boltSid=Math.random().toString(36).slice(2))),{method:'POST',keepalive:true}).catch(function(){});}catch(e){}}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){_boltTrack(location.pathname);});}else{_boltTrack(location.pathname);}var _hp=history.pushState;history.pushState=function(){_hp.apply(this,arguments);_boltTrack(location.pathname);};window.addEventListener('popstate',function(){_boltTrack(location.pathname);});}());</script>`;
+      files['index.html'] = files['index.html'].replace('</body>', trackerScript + '</body>');
+
+      if (!files['index.html'].includes(trackerScript)) {
+        // Fallback: inject before </html> if no </body>
+        files['index.html'] = files['index.html'].replace('</html>', trackerScript + '</html>');
+      }
+
+      logger.info(`Analytics tracker injected for app: ${flyAppName} → ${boltUrl}`);
     }
 
     // Write all files to the temp directory
