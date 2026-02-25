@@ -341,6 +341,9 @@ async function handleFlyDeploy(
     const dockerfile = files.Dockerfile || '';
     const port = detectPortFromDockerfile(dockerfile);
 
+    logger.info(`Detected port from Dockerfile: ${port}`);
+    logger.info(`Dockerfile starts with: ${dockerfile.substring(0, 200)}`);
+
     // Generate fly.toml if not already present
     if (!files['fly.toml']) {
       files['fly.toml'] = generateFlyToml(flyAppName, port);
@@ -368,6 +371,7 @@ async function handleFlyDeploy(
         try {
           // Step 1: Try to create the Fly app (ignore if it already exists)
           log(`[1/3] Creating Fly.io app "${flyAppName}" in region "${flyRegion}"...\n`);
+          log(`       Detected internal port: ${port}\n`);
 
           await new Promise<void>((resolve) => {
             const createApp = spawn('flyctl', ['apps', 'create', flyAppName, '--org', 'personal', '-y'], {
