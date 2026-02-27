@@ -411,6 +411,19 @@ export const Workbench = memo(
                     Analytics
                   </button>
                 )}
+                {/* Visit App button — opens the deployed URL in a new tab */}
+                {isDeployed && currentMeta?.deployedUrl && (
+                  <a
+                    href={currentMeta.deployedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ml-1 bg-green-500/20 text-green-500 border border-green-500/30 hover:bg-green-500/30"
+                    title={`Visit deployed app: ${currentMeta.deployedUrl}`}
+                  >
+                    <span className="i-ph:arrow-square-out text-sm" />
+                    Visit App
+                  </a>
+                )}
                 <div className="ml-auto" />
                 {/* Export and Sync buttons always visible */}
                 <div className="flex overflow-y-auto">

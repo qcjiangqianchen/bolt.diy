@@ -116,10 +116,11 @@ export function RecentTasks() {
 
       <div className="rounded-xl border border-bolt-elements-borderColor overflow-hidden bg-bolt-elements-background-depth-2">
         {/* Table header */}
-        <div className="grid grid-cols-[1fr_2fr_auto] gap-4 px-4 py-2.5 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
+        <div className="grid grid-cols-[80px_1fr_120px_180px] gap-4 px-4 py-2.5 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
           <span>ID</span>
           <span>Task</span>
           <span>Last Modified</span>
+          <span>Status</span>
         </div>
 
         {/* Fixed-height rows container — always fits exactly 5 rows */}
@@ -128,7 +129,7 @@ export function RecentTasks() {
             <a
               key={task.id}
               href={`/chat/${task.urlId}`}
-              className={`grid grid-cols-[1fr_2fr_auto] gap-4 px-4 items-center hover:bg-bolt-elements-item-backgroundActive transition-colors group ${
+              className={`grid grid-cols-[80px_1fr_120px_180px] gap-4 px-4 items-center hover:bg-bolt-elements-item-backgroundActive transition-colors group ${
                 index < pageTasks.length - 1 ? 'border-b border-bolt-elements-borderColor' : ''
               }`}
               style={{ height: '48px' }}
@@ -144,6 +145,29 @@ export function RecentTasks() {
               <span className="text-xs text-bolt-elements-textTertiary whitespace-nowrap">
                 {formatRelativeDate(task.timestamp)}
               </span>
+              {/* Status column */}
+              <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                {task.metadata?.deployedUrl ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 whitespace-nowrap">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Deployed
+                    </span>
+                    <a
+                      href={task.metadata.deployedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors whitespace-nowrap"
+                    >
+                      <span className="i-ph:globe text-sm" />
+                      Visit App
+                    </a>
+                  </>
+                ) : (
+                  <span className="text-xs text-bolt-elements-textTertiary">—</span>
+                )}
+              </div>
             </a>
           ))}
         </div>

@@ -2,13 +2,14 @@ import { useStore } from '@nanostores/react';
 import { isGitLabConnected } from '~/lib/stores/gitlabConnection';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { streamingState } from '~/lib/stores/streaming';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGitLabDeploy } from '~/components/deploy/GitLabDeploy.client';
 import { GitLabDeploymentDialog } from '~/components/deploy/GitLabDeploymentDialog';
 import { useDockerDeploy } from '~/components/deploy/DockerDeploy.client';
 import { DeployProgressDialog } from '~/components/deploy/DeployProgressDialog';
 import { toast } from 'react-toastify';
 import { useChatHistory, chatMetadata } from '~/lib/persistence/useChatHistory';
+import { usePreviewStore } from '~/lib/stores/previews';
 
 interface DeployButtonProps {
   onGitLabDeploy?: () => Promise<void>;
@@ -34,6 +35,27 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
   const [deployStatus, setDeployStatus] = useState<'deploying' | 'success' | 'error'>('deploying');
   const [deployLog, setDeployLog] = useState('');
   const [deployedAppUrl, setDeployedAppUrl] = useState<string | null>(null);
+
+  // Track preview refresh signal to detect new changes since last deploy
+  const previewsStore = usePreviewStore();
+  const refreshSignal = useStore(previewsStore.refreshSignal);
+
+  // -1 means no deploy has happened yet this session (button enabled)
+  const [deployedAtSignal, setDeployedAtSignal] = useState(-1);
+
+  // Keep a ref so the deploy callback always reads the latest signal value
+  const refreshSignalRef = useRef(refreshSignal);
+
+  useEffect(() => {
+    refreshSignalRef.current = refreshSignal;
+  }, [refreshSignal]);
+
+  // When switching to a chat that has never been deployed, reset the guard
+  useEffect(() => {
+    if (!currentMetadata?.deployedUrl) {
+      setDeployedAtSignal(-1);
+    }
+  }, [currentMetadata?.deployedUrl]);
 
   const handleGitLabDeployClick = async () => {
     setIsDeploying(true);
@@ -76,12 +98,29 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
         throw new Error('Failed to prepare project files. Check the terminal for build errors.');
       }
 
-      // Step 3: Auto-generate a unique app name (no user input)
-      const baseName = result.projectName.replace(/[^a-z0-9-]/g, '').slice(0, 24);
-      const suffix = Date.now().toString(36).slice(-4);
-      const flyAppName = `${baseName}-${suffix}`;
+      /*
+       * Step 3: Determine the Fly.io app name
+       * - FIRST deploy: auto-generate a unique name (project name + short id suffix)
+       * - REDEPLOY:     reuse the name stored in metadata so flyctl updates the SAME app
+       *   in-place — zero-downtime rolling deploy, URL unchanged, analytics history preserved.
+       */
+      const existingUrl = currentMetadata?.deployedUrl;
+      let flyAppName: string;
 
-      setDeployLog((prev) => prev + `Files collected. Deploying as "${flyAppName}"...\n\n`);
+      if (existingUrl) {
+        try {
+          flyAppName = new URL(existingUrl).hostname.split('.')[0];
+          setDeployLog((prev) => prev + `Redeploying "${flyAppName}" in-place (same URL, zero downtime)...\n\n`);
+        } catch {
+          // URL parse failed — fall back to a fresh name
+          flyAppName = `${result.projectName.replace(/[^a-z0-9-]/g, '').slice(0, 24)}-${Date.now().toString(36).slice(-4)}`;
+          setDeployLog((prev) => prev + `Deploying as "${flyAppName}"...\n\n`);
+        }
+      } else {
+        // First deploy — generate a stable unique name
+        flyAppName = `${result.projectName.replace(/[^a-z0-9-]/g, '').slice(0, 24)}-${Date.now().toString(36).slice(-4)}`;
+        setDeployLog((prev) => prev + `Deploying as "${flyAppName}"...\n\n`);
+      }
 
       // Step 4: Send to server for Fly.io deployment
       const response = await fetch('/api/deploy-docker', {
@@ -132,6 +171,9 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
       setDeployStatus('success');
       toast.success('Application deployed successfully!');
 
+      // Lock the deploy button until the preview refreshes again (new changes)
+      setDeployedAtSignal(refreshSignalRef.current);
+
       // Persist the deployed URL in chat metadata so sidebar and analytics panel can read it
       try {
         await updateChatMestaData({
@@ -172,9 +214,19 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
 
       <button
         onClick={handleOneClickDeploy}
-        disabled={isPackaging || (deployStatus === 'deploying' && showDeployProgress) || !activePreview || isStreaming}
+        disabled={
+          isPackaging ||
+          (deployStatus === 'deploying' && showDeployProgress) ||
+          !activePreview ||
+          isStreaming ||
+          (deployedAtSignal !== -1 && refreshSignal === deployedAtSignal)
+        }
         className="rounded-md items-center justify-center [&:is(:disabled,.disabled)]:cursor-not-allowed [&:is(:disabled,.disabled)]:opacity-60 px-3 py-1.5 text-xs bg-purple-600 text-white hover:bg-purple-700 outline-purple-600 flex gap-1.5 border border-bolt-elements-borderColor"
-        title="Deploy your application"
+        title={
+          deployedAtSignal !== -1 && refreshSignal === deployedAtSignal
+            ? 'No changes since last deploy'
+            : 'Deploy your application'
+        }
       >
         <div className="i-ph:rocket-launch text-base" />
         <span>{isPackaging || (deployStatus === 'deploying' && showDeployProgress) ? 'Deploying...' : 'Deploy'}</span>
