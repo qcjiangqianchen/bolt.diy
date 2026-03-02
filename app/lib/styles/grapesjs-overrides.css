@@ -1,0 +1,168 @@
+/*
+ * GrapeJS UI overrides — strips out GrapeJS's default chrome so we show
+ * only the canvas and the blocks panel.
+ *
+ * We load the stock CSS first (imported in VisualEditor.client.tsx)
+ * then apply these overrides to hide panels we don't want.
+ */
+
+/* ── Canvas area ─────────────────────────────────────────────────────────── */
+.gjs-editor {
+  background: transparent;
+  font-family: inherit;
+}
+
+/* The canvas wrapper expands to fill its container */
+.gjs-editor-cont {
+  position: absolute;
+  inset: 0;
+}
+
+/* Main selectable-highlight colours matching bolt.diy purple */
+.gjs-selected {
+  outline: 2px solid #8b5cf6 !important;
+}
+
+.gjs-hovered {
+  outline: 1px dashed #8b5cf6 !important;
+}
+
+/* ── Toolbar (floating action bar on selected element) ────────────────────── */
+.gjs-toolbar {
+  background: #1e1e2e;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+}
+
+.gjs-toolbar-item {
+  color: #c4b5fd;
+}
+
+.gjs-toolbar-item:hover {
+  background: rgba(139, 92, 246, 0.2);
+  color: #fff;
+}
+
+/* ── Blocks panel ────────────────────────────────────────────────────────── */
+
+/* The outer container that wraps all categories */
+.gjs-blocks-c {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px;
+  align-content: start;
+}
+
+/* Each block card */
+.gjs-block {
+  width: auto !important;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: #2e2e40;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  cursor: grab;
+  transition: all 0.15s ease;
+  color: #e2e2f0;
+  font-size: 11px;
+  text-align: center;
+  user-select: none;
+}
+
+.gjs-block:hover {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: rgba(139, 92, 246, 0.7);
+  color: #f0e8ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+
+.gjs-block:active {
+  cursor: grabbing;
+  transform: translateY(0);
+}
+
+.gjs-block-label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: inherit;
+}
+
+/* Block icons */
+.gjs-block svg,
+.gjs-block .block-icon {
+  width: 24px;
+  height: 24px;
+  opacity: 0.85;
+}
+
+/* Category section wrapper — full width, not inside the grid */
+.gjs-block-category {
+  grid-column: 1 / -1;
+}
+
+/* The grid lives INSIDE each category */
+.gjs-block-category .gjs-blocks-c {
+  padding: 4px 0;
+}
+
+/* Category header */
+.gjs-block-category .gjs-title {
+  padding: 8px 8px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a78bfa;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Drop placeholder highlight */
+.gjs-placeholder {
+  border: 2px dashed #8b5cf6 !important;
+  background: rgba(139, 92, 246, 0.08) !important;
+}
+
+/* ── Seamless canvas — remove gray dead space ────────────────────────────── */
+
+/* Remove gray checkerboard / background from canvas area */
+.gjs-cv-canvas {
+  background: transparent !important;
+  width: 100% !important;
+  height: 100% !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
+/* Iframe fills container, no border gap */
+.gjs-frame {
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Device-size frame wrapper: full size, no centering offset */
+.gjs-frame-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  left: 0 !important;
+  top: 0 !important;
+}
+
+.gjs-cv-canvas__frames {
+  height: 100%;
+}

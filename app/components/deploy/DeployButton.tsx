@@ -1,5 +1,4 @@
 import { useStore } from '@nanostores/react';
-import { isGitLabConnected } from '~/lib/stores/gitlabConnection';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { streamingState } from '~/lib/stores/streaming';
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -15,17 +14,16 @@ interface DeployButtonProps {
   onGitLabDeploy?: () => Promise<void>;
 }
 
-export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
-  const gitlabIsConnected = useStore(isGitLabConnected);
+export const DeployButton = ({ onGitLabDeploy: _onGitLabDeploy }: DeployButtonProps) => {
   const [activePreviewIndex] = useState(0);
   const previews = useStore(workbenchStore.previews);
   const activePreview = previews[activePreviewIndex];
-  const [isDeploying, setIsDeploying] = useState(false);
   const isStreaming = useStore(streamingState);
-  const { handleGitLabDeploy } = useGitLabDeploy();
+  useGitLabDeploy();
+
   const [showGitLabDeploymentDialog, setShowGitLabDeploymentDialog] = useState(false);
-  const [gitlabDeploymentFiles, setGitlabDeploymentFiles] = useState<Record<string, string> | null>(null);
-  const [gitlabProjectName, setGitlabProjectName] = useState('');
+  const [gitlabDeploymentFiles] = useState<Record<string, string> | null>(null);
+  const [gitlabProjectName] = useState('');
   const { updateChatMestaData } = useChatHistory();
   const currentMetadata = useStore(chatMetadata);
 
@@ -56,26 +54,6 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
       setDeployedAtSignal(-1);
     }
   }, [currentMetadata?.deployedUrl]);
-
-  const handleGitLabDeployClick = async () => {
-    setIsDeploying(true);
-
-    try {
-      if (onGitLabDeploy) {
-        await onGitLabDeploy();
-      } else {
-        const result = await handleGitLabDeploy();
-
-        if (result && result.success && result.files) {
-          setGitlabDeploymentFiles(result.files);
-          setGitlabProjectName(result.projectName);
-          setShowGitLabDeploymentDialog(true);
-        }
-      }
-    } finally {
-      setIsDeploying(false);
-    }
-  };
 
   /**
    * One-click deploy: collect files → generate Dockerfile → deploy to Fly.io.
@@ -195,6 +173,7 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
 
   return (
     <>
+      {/* Deploy to GitLab button — commented out per UI simplification request
       <button
         onClick={handleGitLabDeployClick}
         disabled={isDeploying || !activePreview || !gitlabIsConnected || isStreaming}
@@ -211,6 +190,7 @@ export const DeployButton = ({ onGitLabDeploy }: DeployButtonProps) => {
         />
         <span>{isDeploying ? 'Deploying...' : 'Deploy to GitLab'}</span>
       </button>
+      */}
 
       <button
         onClick={handleOneClickDeploy}

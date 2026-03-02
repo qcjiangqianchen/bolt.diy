@@ -86,6 +86,17 @@ export default defineConfig((config) => {
         '**/tests/preview/**', // Exclude preview tests that require Playwright
       ],
     },
+    optimizeDeps: {
+      // GrapeJS and its CJS deps (backbone, underscore) are incompatible with
+      // Vite's dep pre-bundler. Exclude them so they're served directly from
+      // node_modules/grapesjs/dist/grapes.mjs via native ESM.
+      exclude: ['grapesjs', 'backbone', 'underscore', 'backbone-undo'],
+    },
+    ssr: {
+      // Keep GrapeJS out of the SSR bundle — it's browser-only, loaded
+      // dynamically via import('grapesjs') inside useEffect.
+      external: ['grapesjs'],
+    },
   };
 });
 
