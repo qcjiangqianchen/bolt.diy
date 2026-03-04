@@ -14,3 +14,10 @@ export const visualEditorCssAtom = atom<string>('');
  * False when the canvas started blank (no index.html found in WebContainer).
  */
 export const visualEditorSyncedAtom = atom<boolean>(false);
+
+/**
+ * Incremented by action-runner whenever the LLM writes an HTML or CSS file
+ * to the WebContainer. VisualEditor watches this to re-read the file and
+ * update the GrapeJS canvas so user edits and LLM edits stay in sync.
+ */
+export const visualEditorUpdateSignalAtom = atom<number>(0);

@@ -47,16 +47,16 @@
 
 /* The outer container that wraps all categories */
 .gjs-blocks-c {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 6px !important;
   padding: 8px;
   align-content: start;
 }
 
 /* Each block card */
 .gjs-block {
-  width: auto !important;
+  width: 100% !important;
   min-height: 64px;
   display: flex;
   flex-direction: column;
@@ -141,28 +141,100 @@
 /* Remove gray checkerboard / background from canvas area */
 .gjs-cv-canvas {
   background: transparent !important;
-  width: 100% !important;
-  height: 100% !important;
   top: 0 !important;
-  left: 0 !important;
+  height: 100% !important;
 }
 
 /* Iframe fills container, no border gap */
 .gjs-frame {
   border: none !important;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Device-size frame wrapper: full size, no centering offset */
-.gjs-frame-wrapper {
-  width: 100% !important;
-  height: 100% !important;
-  transform: none !important;
-  left: 0 !important;
-  top: 0 !important;
 }
 
 .gjs-cv-canvas__frames {
   height: 100%;
+}
+
+/* ── UI Panel Styling ────────────────────────────────────────────────────── */
+
+/* Hide devices, options, and commands panels (top black bar) */
+.gjs-pn-devices-c,
+.gjs-pn-options,
+.gjs-pn-commands {
+  display: none !important;
+}
+
+/* Style the native GrapesJS panels matching the dark theme */
+.gjs-pn-panels {
+  background-color: #1e1e2e;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Keep the views buttons at the top of the right panel */
+.gjs-pn-views {
+  top: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: #1e1e2e;
+}
+
+.gjs-pn-views-container {
+  background-color: #1e1e2e;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gjs-sm-sector .gjs-sm-title,
+.gjs-clm-tags .gjs-sm-title {
+  background-color: #2e2e40;
+  color: #e2e2f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gjs-sm-property {
+  color: #c4b5fd;
+}
+
+/* Hide the native open-blocks button since we use our custom left BlocksPanel */
+.gjs-pn-btn[title='Blocks'] {
+  display: none !important;
+}
+
+/* ── Custom Typography Radio Buttons (WYSWIYG style) ── */
+.gjs-sm-property.gjs-sm-radio .gjs-radio-items {
+  display: flex;
+  background: #1e1e2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.gjs-sm-property.gjs-sm-radio .gjs-radio-item {
+  flex: 1;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gjs-sm-property.gjs-sm-radio .gjs-radio-item:last-child {
+  border-right: none;
+}
+
+.gjs-sm-property.gjs-sm-radio .gjs-radio-item-label {
+  padding: 6px 0;
+  cursor: pointer;
+  color: #a1a1aa;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gjs-sm-property.gjs-sm-radio .gjs-radio-item-label:hover {
+  background: rgba(139, 92, 246, 0.1);
+  color: #c4b5fd;
+}
+
+.gjs-sm-property.gjs-sm-radio input:checked + .gjs-radio-item-label {
+  background: rgba(139, 92, 246, 0.25);
+  color: #a78bfa;
 }

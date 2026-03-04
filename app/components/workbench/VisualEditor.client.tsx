@@ -11,13 +11,16 @@
  * Only the canvas is exposed — no style manager, no trait manager, no panels.
  */
 import { useEffect, useRef, memo, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   visualEditorAtom,
   visualEditorHtmlAtom,
   visualEditorCssAtom,
   visualEditorSyncedAtom,
+  visualEditorUpdateSignalAtom,
 } from '~/lib/stores/visualEditorStore';
 import { webcontainer } from '~/lib/webcontainer';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 // Our bolt.diy overrides for GrapeJS styling
 import '~/lib/styles/grapesjs-overrides.css';
@@ -28,8 +31,10 @@ import '~/lib/styles/grapesjs-overrides.css';
  * project has Tailwind or any CSS framework loaded in the canvas iframe.
  */
 
-const DROP_ZONE_STYLE =
-  'min-height:80px;padding:16px;background:rgba(139,92,246,0.04);border:2px dashed rgba(139,92,246,0.25);border-radius:8px;';
+/*
+ * const DROP_ZONE_STYLE =
+ *   'min-height:80px;padding:16px;background:rgba(139,92,246,0.04);border:2px dashed rgba(139,92,246,0.25);border-radius:8px;';
+ */
 
 const BLOCKS = [
   // ── Basic — individual elements ──────────────────────────────────────────
@@ -135,63 +140,51 @@ const BLOCKS = [
       '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#111;"><iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" src="https://www.youtube.com/embed/dQw4w9WgXcQ" allowfullscreen></iframe></div>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>`,
   },
+
+  // ── Layout — Sections, Grid, and Spacing ──────────────────────────────
+  {
+    id: 'section',
+    label: 'Section',
+    category: 'Layout',
+    content: {
+      type: 'section-container',
+      content: '', // Empty because component styles handle size/padding
+    },
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/></svg>`,
+  },
+  {
+    id: 'flex-row',
+    label: 'Row',
+    category: 'Layout',
+    content: {
+      type: 'flex-row',
+      content: '', // Empty because component styles handle size/padding
+    },
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="8" width="20" height="8" rx="1"/></svg>`,
+  },
+  {
+    id: 'flex-col',
+    label: 'Column',
+    category: 'Layout',
+    content: {
+      type: 'flex-col',
+      content: '', // Empty because component styles handle size/padding
+    },
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="20" rx="1"/></svg>`,
+  },
   {
     id: 'divider',
     label: 'Divider',
-    category: 'Basic',
-    content: '<hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0;"/>',
+    category: 'Layout',
+    content: { type: 'custom-divider' },
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/></svg>`,
   },
   {
     id: 'spacer',
     label: 'Spacer',
-    category: 'Basic',
-    content: '<div style="height:64px;"></div>',
+    category: 'Layout',
+    content: '<div style="height:64px;width:100%;"></div>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="4" x2="12" y2="20"/><path d="M4 4h16M4 20h16"/></svg>`,
-  },
-
-  // ── Layout — droppable grid containers (inline CSS so columns work) ───────
-  {
-    id: 'layout-full',
-    label: 'Full Row',
-    category: 'Layout',
-    content: `<div style="width:100%;padding:24px 0;"><div style="${DROP_ZONE_STYLE}display:block;width:100%;">Drop content here</div></div>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="1"/></svg>`,
-  },
-  {
-    id: 'layout-2col',
-    label: '2 Columns',
-    category: 'Layout',
-    content: `<div style="display:flex;gap:20px;width:100%;padding:8px 0;"><div style="${DROP_ZONE_STYLE}flex:1;">Column 1</div><div style="${DROP_ZONE_STYLE}flex:1;">Column 2</div></div>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="9" height="16" rx="1"/><rect x="13" y="4" width="9" height="16" rx="1"/></svg>`,
-  },
-  {
-    id: 'layout-3col',
-    label: '3 Columns',
-    category: 'Layout',
-    content: `<div style="display:flex;gap:16px;width:100%;padding:8px 0;"><div style="${DROP_ZONE_STYLE}flex:1;">Column 1</div><div style="${DROP_ZONE_STYLE}flex:1;">Column 2</div><div style="${DROP_ZONE_STYLE}flex:1;">Column 3</div></div>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="6" height="16" rx="1"/><rect x="9" y="4" width="6" height="16" rx="1"/><rect x="17" y="4" width="6" height="16" rx="1"/></svg>`,
-  },
-  {
-    id: 'layout-4col',
-    label: '4 Columns',
-    category: 'Layout',
-    content: `<div style="display:flex;gap:12px;width:100%;padding:8px 0;"><div style="${DROP_ZONE_STYLE}flex:1;">Column 1</div><div style="${DROP_ZONE_STYLE}flex:1;">Column 2</div><div style="${DROP_ZONE_STYLE}flex:1;">Column 3</div><div style="${DROP_ZONE_STYLE}flex:1;">Column 4</div></div>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="4" height="14" rx="1"/><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="13" y="5" width="4" height="14" rx="1"/><rect x="19" y="5" width="4" height="14" rx="1"/></svg>`,
-  },
-  {
-    id: 'layout-sidebar-left',
-    label: 'Sidebar Left',
-    category: 'Layout',
-    content: `<div style="display:flex;gap:20px;width:100%;padding:8px 0;"><div style="${DROP_ZONE_STYLE}flex:0 0 240px;">Sidebar</div><div style="${DROP_ZONE_STYLE}flex:1;">Main Content</div></div>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="7" height="16" rx="1"/><rect x="11" y="4" width="11" height="16" rx="1"/></svg>`,
-  },
-  {
-    id: 'layout-sidebar-right',
-    label: 'Sidebar Right',
-    category: 'Layout',
-    content: `<div style="display:flex;gap:20px;width:100%;padding:8px 0;"><div style="${DROP_ZONE_STYLE}flex:1;">Main Content</div><div style="${DROP_ZONE_STYLE}flex:0 0 240px;">Sidebar</div></div>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="11" height="16" rx="1"/><rect x="15" y="4" width="7" height="16" rx="1"/></svg>`,
   },
 
   /*
@@ -203,7 +196,6 @@ const BLOCKS = [
     label: 'Card',
     category: 'Cards',
     content: `<div style="background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.08);overflow:hidden;width:100%;box-sizing:border-box;">
-  <img src="https://placehold.co/600x320?text=Image" alt="" style="width:100%;display:block;"/>
   <div style="padding:24px;">
     <h3 style="font-size:1.2rem;font-weight:700;margin:0 0 8px;color:#111827;">Card Title</h3>
     <p style="font-size:0.9rem;color:#6b7280;line-height:1.6;margin:0 0 16px;">Card description text goes here. Keep it concise and compelling.</p>
@@ -551,6 +543,101 @@ export const VisualEditor = memo(() => {
   const originalHtmlRef = useRef<string>('');
   const indexHtmlPathRef = useRef<string>('');
   const [, setLoadStatus] = useState<'loading' | 'loaded-from-file' | 'blank'>('loading');
+  const updateSignal = useStore(visualEditorUpdateSignalAtom);
+  const isSyncingFromExternalRef = useRef(false);
+
+  // ── Re-read from WebContainer when LLM writes HTML/CSS ──────────────────
+  useEffect(() => {
+    if (!editorRef.current || !updateSignal) {
+      return;
+    }
+
+    const editor = editorRef.current;
+
+    webcontainer.then(async (wc) => {
+      if (!indexHtmlPathRef.current) {
+        return;
+      }
+
+      try {
+        const content = await wc.fs.readFile(indexHtmlPathRef.current, 'utf-8');
+
+        if (!content) {
+          return;
+        }
+
+        const { bodyHtml, cssContent: inlineCss } = parseHtmlDocument(content);
+
+        // ── Read linked CSS files (same logic as initial mount) ──
+        let linkedCss = '';
+        const externalStyleUrls: string[] = [];
+
+        const linkMatches = [
+          ...content.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["']/gi),
+          ...content.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet["']/gi),
+        ];
+        const hrefs = [...new Set(linkMatches.map((m) => m[1]))];
+
+        for (const href of hrefs) {
+          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) {
+            externalStyleUrls.push(href);
+            continue;
+          }
+
+          const relativePath = href.replace(/^\//, '');
+
+          try {
+            const cssFileContent = await wc.fs.readFile(relativePath, 'utf-8');
+
+            if (cssFileContent) {
+              linkedCss += `\n/* ── ${relativePath} ── */\n${cssFileContent}\n`;
+            }
+          } catch {
+            // File not found
+          }
+        }
+
+        const allCss = [inlineCss, linkedCss].filter(Boolean).join('\n');
+
+        // Guard flag: prevent syncExport from writing back while we update from LLM
+        isSyncingFromExternalRef.current = true;
+
+        if (bodyHtml) {
+          editor.setComponents(bodyHtml);
+        }
+
+        if (allCss) {
+          editor.setStyle(allCss);
+        }
+
+        // Inject external stylesheet URLs into the GrapeJS canvas <head>
+        if (externalStyleUrls.length > 0) {
+          const canvasDoc = editor.Canvas.getDocument();
+
+          if (canvasDoc) {
+            for (const url of externalStyleUrls) {
+              if (!canvasDoc.querySelector(`link[href="${url}"]`)) {
+                const link = canvasDoc.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = url;
+                canvasDoc.head.appendChild(link);
+              }
+            }
+          }
+        }
+
+        originalHtmlRef.current = content;
+
+        // Release guard after GrapeJS finishes its internal update cycle
+        setTimeout(() => {
+          isSyncingFromExternalRef.current = false;
+        }, 200);
+      } catch (err) {
+        isSyncingFromExternalRef.current = false;
+        console.warn('[VisualEditor] Failed to sync LLM changes into canvas:', err);
+      }
+    });
+  }, [updateSignal]);
 
   useEffect(() => {
     // Inject GrapeJS stock CSS into the page (if not already present)
@@ -671,10 +758,110 @@ export const VisualEditor = memo(() => {
         width: 'auto',
         fromElement: false,
 
-        // ── Disable everything except canvas ──────────────────────
-        panels: { defaults: [] },
-        styleManager: { sectors: [] },
-        traitManager: { appendTo: '' },
+        /*
+         * ── Enable native GUI panels (Style/Trait Managers) ──────────────────
+         * panels: { defaults: [] }, // Removed to allow default right-panel
+         */
+        styleManager: {
+          sectors: [
+            {
+              name: 'Dimension',
+              open: true,
+              buildProps: ['width', 'height', 'padding', 'margin'],
+              properties: [
+                {
+                  type: 'select',
+                  property: 'width',
+                  name: 'Width',
+                  default: '100%',
+                  options: [
+                    { value: 'auto', name: 'Auto' },
+                    { value: '100%', name: '100%' },
+                    { value: '50%', name: '50%' },
+                    { value: '25%', name: '25%' },
+                  ],
+                },
+                {
+                  type: 'select',
+                  property: 'height',
+                  name: 'Height',
+                  default: 'auto',
+                  options: [
+                    { value: 'auto', name: 'Auto' },
+                    { value: '100%', name: '100%' },
+                    { value: '50vh', name: 'Half Screen' },
+                    { value: '100vh', name: 'Full Screen' },
+                  ],
+                },
+              ],
+            },
+            {
+              name: 'Typography',
+              open: false,
+              buildProps: [
+                'font-family',
+                'font-size',
+                'color',
+                'text-align',
+                'font-weight',
+                'font-style',
+                'text-decoration',
+              ],
+              properties: [
+                {
+                  type: 'radio',
+                  property: 'text-align',
+                  name: 'Alignment',
+                  defaults: 'left',
+                  options: [
+                    { value: 'left', title: 'Left', className: 'i-ph:text-align-left' },
+                    { value: 'center', title: 'Center', className: 'i-ph:text-align-center' },
+                    { value: 'right', title: 'Right', className: 'i-ph:text-align-right' },
+                    { value: 'justify', title: 'Justify', className: 'i-ph:text-align-justify' },
+                  ],
+                },
+                {
+                  type: 'radio',
+                  property: 'font-weight',
+                  name: 'Bold',
+                  defaults: '400',
+                  options: [
+                    { value: '400', title: 'Normal', className: 'i-ph:text-t' },
+                    { value: '700', title: 'Bold', className: 'i-ph:text-b' },
+                  ],
+                },
+                {
+                  type: 'radio',
+                  property: 'font-style',
+                  name: 'Italic',
+                  defaults: 'normal',
+                  options: [
+                    { value: 'normal', title: 'Normal', className: 'i-ph:text-t' },
+                    { value: 'italic', title: 'Italic', className: 'i-ph:text-italic' },
+                  ],
+                },
+                {
+                  type: 'radio',
+                  property: 'text-decoration',
+                  name: 'Underline',
+                  defaults: 'none',
+                  options: [
+                    { value: 'none', title: 'None', className: 'i-ph:text-t' },
+                    { value: 'underline', title: 'Underline', className: 'i-ph:text-underline' },
+                    { value: 'line-through', title: 'Strike', className: 'i-ph:text-strikethrough' },
+                  ],
+                },
+              ],
+            },
+            {
+              name: 'Decorations',
+              open: false,
+              buildProps: ['background-color', 'border-radius', 'border'],
+            },
+          ],
+        },
+
+        // traitManager: { appendTo: '' }, // Removed to allow default properties
         selectorManager: { componentFirst: true },
         storageManager: false,
 
@@ -715,6 +902,144 @@ export const VisualEditor = memo(() => {
         setLoadStatus('blank');
       }
 
+      // ── 3.5 Register Custom Component Behaviors ──────────────────────
+
+      // 1. SECTION: Acts as the main container for the webpage
+      editor.Components.addType('section-container', {
+        model: {
+          defaults: {
+            tagName: 'section',
+            droppable: true, // Allow dropping elements inside
+            draggable: true,
+            style: {
+              width: '100%',
+              padding: '60px 20px',
+              'box-sizing': 'border-box',
+              'min-height': '150px',
+            },
+          },
+        },
+      });
+
+      // 2. FLEX ROW: Grid row that only contains columns
+      editor.Components.addType('flex-row', {
+        model: {
+          defaults: {
+            tagName: 'div',
+            droppable: true, // Allow any element inside row
+            draggable: true,
+            style: {
+              display: 'flex',
+              'flex-direction': 'row',
+              'align-items': 'stretch', // Ensure columns stretch to fill the row
+              gap: '20px',
+              width: '100%',
+              'box-sizing': 'border-box',
+              'min-height': '100px',
+              padding: '16px',
+              border: '2px dashed rgba(139,92,246,0.25)',
+              'border-radius': '8px',
+              background: 'rgba(139,92,246,0.04)',
+            },
+          },
+          init() {
+            const tr = (this as any).get('toolbar') || [];
+
+            // Define custom alignment buttons
+            const alignActions = [
+              {
+                attributes: { class: 'i-ph:align-left gjs-toolbar-item', title: 'Align Left' },
+                command: (ed: any) => {
+                  ed.getSelected().addStyle({ 'justify-content': 'flex-start' });
+                },
+              },
+              {
+                attributes: { class: 'i-ph:align-center-horizontal gjs-toolbar-item', title: 'Align Center' },
+                command: (ed: any) => {
+                  ed.getSelected().addStyle({ 'justify-content': 'center' });
+                },
+              },
+              {
+                attributes: { class: 'i-ph:align-right gjs-toolbar-item', title: 'Align Right' },
+                command: (ed: any) => {
+                  ed.getSelected().addStyle({ 'justify-content': 'flex-end' });
+                },
+              },
+            ];
+
+            (this as any).set('toolbar', [...alignActions, ...tr]);
+          },
+        },
+      });
+
+      // 3. FLEX COL: Child of a grid row that holds anything
+      editor.Components.addType('flex-col', {
+        model: {
+          defaults: {
+            tagName: 'div',
+            droppable: true, // Allow generic elements inside column
+            draggable: true, // Remove dependency on row container
+
+            style: {
+              display: 'flex',
+              flex: '1',
+              'flex-direction': 'column',
+              gap: '16px',
+              'box-sizing': 'border-box',
+              'min-height': '100px',
+              padding: '16px',
+              border: '2px dashed rgba(16,185,129,0.25)', // Green dashed border to differentiate from row
+              'border-radius': '8px',
+              background: 'rgba(16,185,129,0.04)',
+            },
+          },
+          init() {
+            const tr = (this as any).get('toolbar') || [];
+
+            // Define custom vertical alignment buttons (for columns)
+            const alignActions = [
+              {
+                attributes: { class: 'i-ph:align-top gjs-toolbar-item', title: 'Align Top' },
+                command: (ed: any) => {
+                  ed.getSelected().addStyle({ 'justify-content': 'flex-start' });
+                },
+              },
+              {
+                attributes: { class: 'i-ph:align-center-vertical gjs-toolbar-item', title: 'Align Center' },
+                command: (ed: any) => {
+                  ed.getSelected().addStyle({ 'justify-content': 'center' });
+                },
+              },
+              {
+                attributes: { class: 'i-ph:align-bottom gjs-toolbar-item', title: 'Align Bottom' },
+                command: (ed: any) => {
+                  ed.getSelected().addStyle({ 'justify-content': 'flex-end' });
+                },
+              },
+            ];
+
+            (this as any).set('toolbar', [...alignActions, ...tr]);
+          },
+        },
+      });
+
+      // 4. DIVIDER: Layout spacing margin
+      editor.Components.addType('custom-divider', {
+        model: {
+          defaults: {
+            tagName: 'hr',
+            droppable: false, // Prevents dropping elements inside the divider
+            draggable: true,
+            style: {
+              border: 'none',
+              'border-top': '1px solid #e5e7eb',
+              margin: '32px 0',
+              width: '100%',
+            },
+          },
+        },
+      });
+
       // Register blocks
       BLOCKS.forEach((block) => {
         editor.Blocks.add(block.id!, {
@@ -728,6 +1053,11 @@ export const VisualEditor = memo(() => {
 
       // ── 4. Sync HTML/CSS on every component change ────────────────
       const syncExport = async () => {
+        // Skip if we're currently updating from an external source (LLM write)
+        if (isSyncingFromExternalRef.current) {
+          return;
+        }
+
         const html = editor.getHtml();
         const css = editor.getCss() ?? '';
 
@@ -742,6 +1072,12 @@ export const VisualEditor = memo(() => {
 
             const wc = await webcontainer;
             await wc.fs.writeFile(indexHtmlPathRef.current, updatedDoc, 'utf-8');
+
+            // Update our reference so subsequent writes use current state
+            originalHtmlRef.current = updatedDoc;
+
+            // Trigger Preview iframe reload so it shows the drag-and-drop edits
+            workbenchStore.previewsStore.refreshAllPreviews();
           } catch (err) {
             console.warn('[VisualEditor] Could not write back to file:', err);
           }

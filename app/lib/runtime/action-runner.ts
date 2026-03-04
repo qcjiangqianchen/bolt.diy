@@ -6,6 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
+import { visualEditorUpdateSignalAtom } from '~/lib/stores/visualEditorStore';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -481,6 +482,11 @@ export class ActionRunner {
     try {
       await webcontainer.fs.writeFile(relativePath, action.content);
       logger.debug(`File written ${relativePath}`);
+
+      // Signal the GrapeJS canvas to re-read when the LLM writes HTML/CSS
+      if (/\.(html?|css)$/.test(relativePath)) {
+        visualEditorUpdateSignalAtom.set(visualEditorUpdateSignalAtom.get() + 1);
+      }
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
     }

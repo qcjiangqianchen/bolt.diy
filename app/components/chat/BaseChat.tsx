@@ -444,7 +444,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           <div
             className={classNames(styles.Chat, 'flex flex-col', chatStarted ? 'h-full overflow-hidden' : 'min-h-full')}
             style={{
-              width: chatStarted ? (showWorkbench ? `${chatWidthPercent}%` : '100%') : '100%',
+              width: chatStarted ? (showWorkbench ? `calc(${chatWidthPercent}% - 80px)` : '100%') : '100%',
               minWidth: chatStarted && showWorkbench ? '300px' : undefined,
               flexShrink: 0,
               transition: isResizing ? 'none' : 'width 0.3s ease',
@@ -630,7 +630,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {() => (
               <div
                 style={{
-                  width: chatStarted && showWorkbench ? `${100 - chatWidthPercent}%` : '0%',
+                  width: chatStarted && showWorkbench ? `calc(${100 - chatWidthPercent}% + 80px)` : '0%',
                   flexShrink: 0,
                   overflow: 'hidden',
                   transition: isResizing ? 'none' : 'width 0.3s ease',
