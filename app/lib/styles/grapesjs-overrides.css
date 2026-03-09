@@ -18,6 +18,10 @@
   inset: 0;
 }
 
+/* ── Clean canvas — default borders are disabled via component config ──── */
+/* The `highlightable: false` default on components removes dashed outlines.
+   Hover + spacing canvas spots (padding/margin colors) are GrapeJS built-ins. */
+
 /* Main selectable-highlight colours matching bolt.diy purple */
 .gjs-selected {
   outline: 2px solid #8b5cf6 !important;
@@ -25,6 +29,21 @@
 
 .gjs-hovered {
   outline: 1px dashed #8b5cf6 !important;
+}
+
+/* ── Canvas spot styling — hover, spacing, select ───────────────────────── */
+/* Spacing canvas spot: padding (green), margin (orange) */
+.gjs-cv-canvas .spacing {
+  pointer-events: none;
+}
+
+/* Hover canvas spot — component name label */
+.gjs-cv-canvas .hover-comp-name {
+  background: #1e1e2e !important;
+  color: #c4b5fd !important;
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
 }
 
 /* ── Toolbar (floating action bar on selected element) ────────────────────── */
@@ -237,4 +256,15 @@
 .gjs-sm-property.gjs-sm-radio input:checked + .gjs-radio-item-label {
   background: rgba(139, 92, 246, 0.25);
   color: #a78bfa;
+}
+
+/* ── Resize handles (PowerPoint-style) ───────────────────────────────── */
+.gjs-resizer-h {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: #8b5cf6 !important;
+  border: 2px solid #fff !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+  margin: -5px !important;
 }

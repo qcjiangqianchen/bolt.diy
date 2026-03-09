@@ -37,49 +37,137 @@ import '~/lib/styles/grapesjs-overrides.css';
  */
 
 const BLOCKS = [
-  // ── Basic — individual elements ──────────────────────────────────────────
+  /*
+   * ── Layout — structural containers that define space distribution ────────
+   * These are NOT visible elements — they organize space for other blocks.
+   */
+  {
+    id: 'section',
+    label: 'Section',
+    category: 'Layout',
+    content: { type: 'section-container' },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="46" height="26" rx="2"/></svg>`,
+  },
+  {
+    id: 'divider',
+    label: 'Divider',
+    category: 'Layout',
+    content: { type: 'custom-divider' },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="14" x2="44" y2="14"/></svg>`,
+  },
+  {
+    id: 'spacer',
+    label: 'Spacer',
+    category: 'Layout',
+    content: '<div style="height:64px;width:100%;"></div>',
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="24" y1="4" x2="24" y2="24" stroke-dasharray="3 2"/><line x1="8" y1="4" x2="40" y2="4"/><line x1="8" y1="24" x2="40" y2="24"/></svg>`,
+  },
+  {
+    id: 'columns-1',
+    label: '1 Column',
+    category: 'Layout',
+    content: { type: 'flex-row', components: [{ type: 'flex-col' }] },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="44" height="22" rx="1"/></svg>`,
+  },
+  {
+    id: 'columns-2-50-50',
+    label: '2 Columns',
+    category: 'Layout',
+    content: {
+      type: 'flex-row',
+      components: [
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+      ],
+    },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="21" height="22" rx="1"/><rect x="25" y="3" width="21" height="22" rx="1"/></svg>`,
+  },
+  {
+    id: 'columns-2-25-75',
+    label: '2 Columns 25/75',
+    category: 'Layout',
+    content: {
+      type: 'flex-row',
+      components: [
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+        { type: 'flex-col', style: { flex: '3 1 0%' } },
+      ],
+    },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="10" height="22" rx="1"/><rect x="14" y="3" width="32" height="22" rx="1"/></svg>`,
+  },
+  {
+    id: 'columns-2-75-25',
+    label: '2 Columns 75/25',
+    category: 'Layout',
+    content: {
+      type: 'flex-row',
+      components: [
+        { type: 'flex-col', style: { flex: '3 1 0%' } },
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+      ],
+    },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="32" height="22" rx="1"/><rect x="36" y="3" width="10" height="22" rx="1"/></svg>`,
+  },
+  {
+    id: 'columns-3',
+    label: '3 Columns',
+    category: 'Layout',
+    content: {
+      type: 'flex-row',
+      components: [
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+        { type: 'flex-col', style: { flex: '1 1 0%' } },
+      ],
+    },
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="13" height="22" rx="1"/><rect x="17" y="3" width="14" height="22" rx="1"/><rect x="33" y="3" width="13" height="22" rx="1"/></svg>`,
+  },
+
+  // ── Text — content elements that can be placed into layout blocks ────────
   {
     id: 'heading',
     label: 'Heading',
-    category: 'Basic',
-    content: '<h1 style="font-size:2.5rem;font-weight:700;margin:0 0 16px;line-height:1.2;">Your Heading</h1>',
+    category: 'Text',
+    content:
+      '<h1 style="font-size:2.5rem;font-weight:700;margin:0 0 16px;line-height:1.2;width:auto;max-width:100%;">Your Heading</h1>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="18" font-size="14" font-weight="bold" stroke="none" fill="currentColor">H1</text></svg>`,
   },
   {
     id: 'heading-center',
     label: 'Heading (Center)',
-    category: 'Basic',
+    category: 'Text',
     content:
-      '<h1 style="font-size:2.5rem;font-weight:700;margin:0 0 16px;line-height:1.2;text-align:center;">Your Heading</h1>',
+      '<h1 style="font-size:2.5rem;font-weight:700;margin:0 0 16px;line-height:1.2;text-align:center;width:auto;max-width:100%;">Your Heading</h1>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="4" y="18" font-size="14" font-weight="bold" stroke="none" fill="currentColor" text-anchor="middle" x="12">H¹</text><line x1="6" y1="20" x2="18" y2="20" stroke-width="1"/></svg>`,
   },
   {
     id: 'subheading',
     label: 'Subheading',
-    category: 'Basic',
-    content: '<h2 style="font-size:1.75rem;font-weight:600;margin:0 0 12px;line-height:1.3;">Subheading</h2>',
+    category: 'Text',
+    content:
+      '<h2 style="font-size:1.75rem;font-weight:600;margin:0 0 12px;line-height:1.3;width:auto;max-width:100%;">Subheading</h2>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="2" y="17" font-size="12" font-weight="bold" stroke="none" fill="currentColor">H2</text></svg>`,
   },
   {
     id: 'text',
     label: 'Paragraph',
-    category: 'Basic',
+    category: 'Text',
     content:
-      '<p style="font-size:1rem;line-height:1.7;margin:0 0 16px;color:#374151;">Click to edit this paragraph. Add your content here.</p>',
+      '<p style="font-size:1rem;line-height:1.7;margin:0 0 16px;color:#374151;width:auto;max-width:100%;">Click to edit this paragraph. Add your content here.</p>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>`,
   },
   {
     id: 'text-center',
     label: 'Text (Center)',
-    category: 'Basic',
+    category: 'Text',
     content:
-      '<p style="font-size:1rem;line-height:1.7;margin:0 0 16px;color:#374151;text-align:center;">Click to edit this paragraph.</p>',
+      '<p style="font-size:1rem;line-height:1.7;margin:0 0 16px;color:#374151;text-align:center;width:auto;max-width:100%;">Click to edit this paragraph.</p>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M6 12h12M4 18h16"/></svg>`,
   },
   {
     id: 'button',
     label: 'Button',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<a href="#" style="display:inline-block;padding:12px 28px;background:#7c3aed;color:#fff;border-radius:8px;font-weight:600;font-size:0.95rem;text-decoration:none;cursor:pointer;">Click Me</a>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3"/><path d="M8 12h8"/></svg>`,
@@ -87,7 +175,7 @@ const BLOCKS = [
   {
     id: 'button-outline',
     label: 'Button (Outline)',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<a href="#" style="display:inline-block;padding:12px 28px;background:transparent;color:#7c3aed;border:2px solid #7c3aed;border-radius:8px;font-weight:600;font-size:0.95rem;text-decoration:none;cursor:pointer;">Click Me</a>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3"/></svg>`,
@@ -95,7 +183,7 @@ const BLOCKS = [
   {
     id: 'button-ghost',
     label: 'Button (Ghost)',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<a href="#" style="display:inline-block;padding:12px 28px;background:transparent;color:#374151;border:1px solid #d1d5db;border-radius:8px;font-weight:600;font-size:0.95rem;text-decoration:none;cursor:pointer;">Click Me</a>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3" stroke-dasharray="3 2"/></svg>`,
@@ -103,7 +191,7 @@ const BLOCKS = [
   {
     id: 'button-danger',
     label: 'Button (Danger)',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<a href="#" style="display:inline-block;padding:12px 28px;background:#dc2626;color:#fff;border-radius:8px;font-weight:600;font-size:0.95rem;text-decoration:none;cursor:pointer;">Delete</a>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3" fill="#dc2626" stroke="#dc2626"/></svg>`,
@@ -111,7 +199,7 @@ const BLOCKS = [
   {
     id: 'button-large',
     label: 'Button (Large)',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<a href="#" style="display:inline-block;padding:18px 48px;background:#7c3aed;color:#fff;border-radius:12px;font-weight:700;font-size:1.1rem;text-decoration:none;cursor:pointer;letter-spacing:0.02em;">Get Started</a>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="22" height="12" rx="3"/></svg>`,
@@ -119,7 +207,7 @@ const BLOCKS = [
   {
     id: 'link',
     label: 'Link',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<a href="https://example.com" target="_self" style="color:#7c3aed;text-decoration:underline;font-weight:500;font-size:1rem;">Link text</a>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
@@ -127,64 +215,18 @@ const BLOCKS = [
   {
     id: 'image',
     label: 'Image',
-    category: 'Basic',
+    category: 'Text',
     content:
-      '<img src="https://placehold.co/800x450?text=Image" alt="Image" style="max-width:100%;height:auto;border-radius:12px;display:block;"/>',
+      '<img src="https://placehold.co/800x450?text=Image" alt="Image" style="width:480px;max-width:100%;height:auto;border-radius:12px;display:block;"/>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`,
   },
   {
     id: 'video',
     label: 'Video Embed',
-    category: 'Basic',
+    category: 'Text',
     content:
       '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#111;"><iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" src="https://www.youtube.com/embed/dQw4w9WgXcQ" allowfullscreen></iframe></div>',
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,8 16,12 10,16"/></svg>`,
-  },
-
-  // ── Layout — Sections, Grid, and Spacing ──────────────────────────────
-  {
-    id: 'section',
-    label: 'Section',
-    category: 'Layout',
-    content: {
-      type: 'section-container',
-      content: '', // Empty because component styles handle size/padding
-    },
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/></svg>`,
-  },
-  {
-    id: 'flex-row',
-    label: 'Row',
-    category: 'Layout',
-    content: {
-      type: 'flex-row',
-      content: '', // Empty because component styles handle size/padding
-    },
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="8" width="20" height="8" rx="1"/></svg>`,
-  },
-  {
-    id: 'flex-col',
-    label: 'Column',
-    category: 'Layout',
-    content: {
-      type: 'flex-col',
-      content: '', // Empty because component styles handle size/padding
-    },
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="20" rx="1"/></svg>`,
-  },
-  {
-    id: 'divider',
-    label: 'Divider',
-    category: 'Layout',
-    content: { type: 'custom-divider' },
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/></svg>`,
-  },
-  {
-    id: 'spacer',
-    label: 'Spacer',
-    category: 'Layout',
-    content: '<div style="height:64px;width:100%;"></div>',
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="4" x2="12" y2="20"/><path d="M4 4h16M4 20h16"/></svg>`,
   },
 
   /*
@@ -364,126 +406,6 @@ const BLOCKS = [
   </div>
 </div>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="10" width="6" height="11" rx="1"/><rect x="9" y="6" width="6" height="15" rx="1"/><rect x="17" y="3" width="6" height="18" rx="1"/></svg>`,
-  },
-
-  // ── Page Sections — full-width structural blocks ──────────────────────────
-  {
-    id: 'section-navbar',
-    label: 'Navbar',
-    category: 'Page Sections',
-    content: `<nav style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;background:#fff;border-bottom:1px solid #f3f4f6;position:sticky;top:0;z-index:100;">
-  <span style="font-size:1.25rem;font-weight:900;color:#111827;">Brand</span>
-  <div style="display:flex;gap:28px;">
-    <a href="#" style="color:#6b7280;font-size:0.9rem;font-weight:500;text-decoration:none;">Home</a>
-    <a href="#" style="color:#6b7280;font-size:0.9rem;font-weight:500;text-decoration:none;">About</a>
-    <a href="#" style="color:#6b7280;font-size:0.9rem;font-weight:500;text-decoration:none;">Contact</a>
-  </div>
-  <a href="#" style="padding:10px 22px;background:#7c3aed;color:#fff;border-radius:8px;font-size:0.875rem;font-weight:600;text-decoration:none;">Sign Up</a>
-</nav>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="5" rx="1"/><circle cx="5" cy="6.5" r="1" fill="currentColor" stroke="none"/><line x1="9" y1="6.5" x2="16" y2="6.5"/></svg>`,
-  },
-  {
-    id: 'section-hero',
-    label: 'Hero Banner',
-    category: 'Page Sections',
-    content: `<section style="min-height:560px;display:flex;align-items:center;justify-content:center;text-align:center;padding:80px 40px;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#4c1d95 100%);color:#fff;">
-  <div style="max-width:700px;">
-    <h1 style="font-size:3.5rem;font-weight:800;margin:0 0 20px;line-height:1.15;">Your Hero Headline Here</h1>
-    <p style="font-size:1.2rem;opacity:0.85;margin:0 0 36px;line-height:1.7;">A compelling subheadline that explains your value proposition in one or two sentences.</p>
-    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-      <a href="#" style="padding:16px 36px;background:#fff;color:#4c1d95;border-radius:12px;font-weight:700;font-size:1rem;text-decoration:none;">Get Started</a>
-      <a href="#" style="padding:16px 36px;background:transparent;color:#fff;border:2px solid rgba(255,255,255,0.5);border-radius:12px;font-weight:600;font-size:1rem;text-decoration:none;">Learn More</a>
-    </div>
-  </div>
-</section>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>`,
-  },
-  {
-    id: 'section-cta',
-    label: 'CTA Banner',
-    category: 'Page Sections',
-    content: `<section style="padding:80px 40px;text-align:center;background:#7c3aed;color:#fff;">
-  <h2 style="font-size:2.5rem;font-weight:800;margin:0 0 16px;">Ready to Get Started?</h2>
-  <p style="font-size:1.1rem;opacity:0.9;margin:0 0 36px;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.6;">Join thousands of customers who trust us to power their business. Start your free trial today.</p>
-  <a href="#" style="display:inline-block;padding:16px 40px;background:#fff;color:#7c3aed;border-radius:12px;font-weight:700;font-size:1rem;text-decoration:none;">Start Free Trial</a>
-</section>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`,
-  },
-  {
-    id: 'section-footer',
-    label: 'Footer',
-    category: 'Page Sections',
-    content: `<footer style="background:#111827;color:#fff;padding:60px 40px 32px;">
-  <div style="display:flex;gap:48px;max-width:1100px;margin:0 auto 40px;flex-wrap:wrap;">
-    <div style="flex:2;min-width:200px;">
-      <h3 style="font-size:1.2rem;font-weight:800;margin:0 0 12px;">Brand</h3>
-      <p style="color:#9ca3af;font-size:0.875rem;line-height:1.7;margin:0 0 20px;max-width:280px;">Building great things for great people. Our mission is to make work better.</p>
-    </div>
-    <div style="flex:1;min-width:120px;">
-      <h4 style="font-size:0.9rem;font-weight:600;margin:0 0 16px;text-transform:uppercase;letter-spacing:0.05em;">Links</h4>
-      <ul style="list-style:none;padding:0;margin:0;font-size:0.875rem;color:#9ca3af;line-height:2.2;">
-        <li><a href="#" style="color:#9ca3af;text-decoration:none;">Home</a></li>
-        <li><a href="#" style="color:#9ca3af;text-decoration:none;">About</a></li>
-        <li><a href="#" style="color:#9ca3af;text-decoration:none;">Blog</a></li>
-      </ul>
-    </div>
-    <div style="flex:1;min-width:120px;">
-      <h4 style="font-size:0.9rem;font-weight:600;margin:0 0 16px;text-transform:uppercase;letter-spacing:0.05em;">Product</h4>
-      <ul style="list-style:none;padding:0;margin:0;font-size:0.875rem;color:#9ca3af;line-height:2.2;">
-        <li><a href="#" style="color:#9ca3af;text-decoration:none;">Features</a></li>
-        <li><a href="#" style="color:#9ca3af;text-decoration:none;">Pricing</a></li>
-        <li><a href="#" style="color:#9ca3af;text-decoration:none;">Docs</a></li>
-      </ul>
-    </div>
-    <div style="flex:1;min-width:140px;">
-      <h4 style="font-size:0.9rem;font-weight:600;margin:0 0 16px;text-transform:uppercase;letter-spacing:0.05em;">Contact</h4>
-      <p style="color:#9ca3af;font-size:0.875rem;line-height:2;">hello@brand.com<br>1-800-BRAND</p>
-    </div>
-  </div>
-  <div style="border-top:1px solid #1f2937;padding-top:24px;text-align:center;color:#6b7280;font-size:0.8rem;max-width:1100px;margin:0 auto;">
-    © 2025 Brand Inc. All rights reserved.
-  </div>
-</footer>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="14" width="20" height="8" rx="1"/><line x1="2" y1="14" x2="22" y2="14"/><path d="M6 10V6M12 8V4M18 10V6"/></svg>`,
-  },
-
-  // ── Forms ────────────────────────────────────────────────────────────────
-  {
-    id: 'form-contact',
-    label: 'Contact Form',
-    category: 'Forms',
-    content: `<form style="background:#fff;border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,0.1);padding:40px;max-width:480px;">
-  <h2 style="font-size:1.5rem;font-weight:700;margin:0 0 24px;">Contact Us</h2>
-  <div style="margin-bottom:16px;"><label style="display:block;font-size:0.875rem;font-weight:500;color:#374151;margin-bottom:6px;">Name</label><input type="text" placeholder="Your name" style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;box-sizing:border-box;outline:none;"/></div>
-  <div style="margin-bottom:16px;"><label style="display:block;font-size:0.875rem;font-weight:500;color:#374151;margin-bottom:6px;">Email</label><input type="email" placeholder="your@email.com" style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;box-sizing:border-box;outline:none;"/></div>
-  <div style="margin-bottom:24px;"><label style="display:block;font-size:0.875rem;font-weight:500;color:#374151;margin-bottom:6px;">Message</label><textarea rows="4" placeholder="Write your message..." style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;box-sizing:border-box;resize:none;outline:none;"></textarea></div>
-  <button type="submit" style="width:100%;padding:14px;background:#7c3aed;color:#fff;border:none;border-radius:10px;font-weight:600;font-size:0.95rem;cursor:pointer;">Send Message</button>
-</form>`,
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>`,
-  },
-  {
-    id: 'input',
-    label: 'Input Field',
-    category: 'Forms',
-    content:
-      '<div style="margin-bottom:16px;"><label style="display:block;font-size:0.875rem;font-weight:500;color:#374151;margin-bottom:6px;">Label</label><input type="text" placeholder="Enter text..." style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;box-sizing:border-box;"/></div>',
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="8" width="20" height="8" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12" stroke-width="3"/></svg>`,
-  },
-  {
-    id: 'checkbox',
-    label: 'Checkbox',
-    category: 'Forms',
-    content:
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><input type="checkbox" style="width:18px;height:18px;accent-color:#7c3aed;cursor:pointer;"/><label style="font-size:0.9rem;color:#374151;cursor:pointer;">I agree to the terms and conditions</label></div>',
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 12 12 15 16 9"/></svg>`,
-  },
-  {
-    id: 'select',
-    label: 'Dropdown',
-    category: 'Forms',
-    content:
-      '<div style="margin-bottom:16px;"><label style="display:block;font-size:0.875rem;font-weight:500;color:#374151;margin-bottom:6px;">Select option</label><select style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:0.9rem;background:#fff;"><option>Option 1</option><option>Option 2</option><option>Option 3</option></select></div>',
-    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2"/><polyline points="16 11 18 13 20 11"/></svg>`,
   },
 ];
 
@@ -904,42 +826,63 @@ export const VisualEditor = memo(() => {
 
       // ── 3.5 Register Custom Component Behaviors ──────────────────────
 
-      // 1. SECTION: Acts as the main container for the webpage
+      // 1. SECTION: Full-width container with centred inner container (like GrapeJS)
       editor.Components.addType('section-container', {
         model: {
           defaults: {
             tagName: 'section',
-            droppable: true, // Allow dropping elements inside
+            droppable: true,
             draggable: true,
+            components: [
+              {
+                type: 'section-inner-container',
+              },
+            ],
             style: {
               width: '100%',
-              padding: '60px 20px',
+              padding: '40px 0',
               'box-sizing': 'border-box',
-              'min-height': '150px',
+              'min-height': '120px',
             },
           },
         },
       });
 
-      // 2. FLEX ROW: Grid row that only contains columns
+      // 1b. SECTION INNER CONTAINER: Centred, max-width child of a section
+      editor.Components.addType('section-inner-container', {
+        model: {
+          defaults: {
+            tagName: 'div',
+            droppable: true,
+            draggable: false, // Only lives inside a section
+            style: {
+              'max-width': '1200px',
+              margin: '0 auto',
+              padding: '0 20px',
+              'min-height': '80px',
+              'box-sizing': 'border-box',
+            },
+          },
+        },
+      });
+
+      // 2. FLEX ROW: Horizontal container that holds columns side-by-side
       editor.Components.addType('flex-row', {
         model: {
           defaults: {
             tagName: 'div',
-            droppable: true, // Allow any element inside row
+            droppable: true,
             draggable: true,
             style: {
               display: 'flex',
               'flex-direction': 'row',
-              'align-items': 'stretch', // Ensure columns stretch to fill the row
+              'flex-wrap': 'nowrap',
+              'align-items': 'stretch',
               gap: '20px',
               width: '100%',
               'box-sizing': 'border-box',
               'min-height': '100px',
               padding: '16px',
-              border: '2px dashed rgba(139,92,246,0.25)',
-              'border-radius': '8px',
-              background: 'rgba(139,92,246,0.04)',
             },
           },
           init() {
@@ -972,25 +915,21 @@ export const VisualEditor = memo(() => {
         },
       });
 
-      // 3. FLEX COL: Child of a grid row that holds anything
+      // 3. FLEX COL: Child of a flex-row that holds droppable content
       editor.Components.addType('flex-col', {
         model: {
           defaults: {
             tagName: 'div',
-            droppable: true, // Allow generic elements inside column
-            draggable: true, // Remove dependency on row container
-
+            droppable: true,
+            draggable: true,
             style: {
               display: 'flex',
-              flex: '1',
+              flex: '1 1 0%',
               'flex-direction': 'column',
               gap: '16px',
               'box-sizing': 'border-box',
               'min-height': '100px',
               padding: '16px',
-              border: '2px dashed rgba(16,185,129,0.25)', // Green dashed border to differentiate from row
-              'border-radius': '8px',
-              background: 'rgba(16,185,129,0.04)',
             },
           },
           init() {
@@ -1049,6 +988,312 @@ export const VisualEditor = memo(() => {
           media: block.media,
           attributes: { title: `Drag to add ${block.label}` },
         });
+      });
+
+      /*
+       * ── Suppress default dotted borders on ALL components ─────────────────
+       * GrapeJS's `highlightable` property controls the default dashed outline
+       * on every component. We override the default component type to turn it
+       * off globally, so the canvas looks like a clean preview.
+       * The hover/spacing canvas spots (showing padding/margin in green/orange)
+       * still work because they are separate from the highlightable system.
+       */
+      const defaultType = editor.DomComponents.getType('default');
+
+      if (defaultType) {
+        editor.DomComponents.addType('default', {
+          model: {
+            defaults: {
+              ...defaultType.model.prototype.defaults,
+              highlightable: false,
+            },
+          },
+        });
+      }
+
+      // Also strip `highlightable` from all components already loaded from HTML
+      const stripHighlightable = (component: any) => {
+        if (component.get('highlightable') !== false) {
+          component.set('highlightable', false);
+        }
+
+        component.components().forEach((child: any) => stripHighlightable(child));
+      };
+      stripHighlightable(editor.getWrapper());
+
+      // And whenever new components are added (e.g. from LLM updates)
+      editor.on('component:add', (component: any) => {
+        if (component.get('highlightable') !== false) {
+          component.set('highlightable', false);
+        }
+      });
+
+      /*
+       * ── Custom hover overlay: fill area with color like GrapeJS ─────────
+       * Inject a reusable overlay div into the canvas iframe that we position
+       * over the hovered element. This gives the full-area colored highlight.
+       * Uses a 150ms debounce to reduce visual noise from rapid mouse movement.
+       */
+      let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+      editor.on('component:hover', (component: any) => {
+        // Clear any pending hover timer
+        if (hoverTimer) {
+          clearTimeout(hoverTimer);
+          hoverTimer = null;
+        }
+
+        const frame = editor.Canvas.getFrameEl();
+        const frameDoc = frame?.contentDocument;
+
+        if (!frameDoc) {
+          return;
+        }
+
+        // Create or reuse the overlay element (immediately, to avoid flicker on first use)
+        let overlay = frameDoc.getElementById('bolt-hover-overlay');
+
+        if (!overlay) {
+          overlay = frameDoc.createElement('div');
+          overlay.id = 'bolt-hover-overlay';
+          overlay.style.cssText = `
+            position: absolute;
+            pointer-events: none;
+            z-index: 9999;
+            transition: all 0.08s ease;
+            box-sizing: border-box;
+          `;
+          frameDoc.body.appendChild(overlay);
+        }
+
+        if (!component) {
+          overlay.style.display = 'none';
+          return;
+        }
+
+        // Debounce the actual overlay positioning by 120ms
+        hoverTimer = setTimeout(() => {
+          const el = component.getEl();
+
+          if (!el) {
+            overlay!.style.display = 'none';
+            return;
+          }
+
+          const rect = el.getBoundingClientRect();
+          const scrollX = frameDoc.documentElement.scrollLeft || frameDoc.body.scrollLeft;
+          const scrollY = frameDoc.documentElement.scrollTop || frameDoc.body.scrollTop;
+          const computed = frameDoc.defaultView!.getComputedStyle(el);
+
+          // Get margin values
+          const mt = parseFloat(computed.marginTop) || 0;
+          const mr = parseFloat(computed.marginRight) || 0;
+          const mb = parseFloat(computed.marginBottom) || 0;
+          const ml = parseFloat(computed.marginLeft) || 0;
+
+          // Get padding values
+          const pt = parseFloat(computed.paddingTop) || 0;
+          const pr = parseFloat(computed.paddingRight) || 0;
+          const pb = parseFloat(computed.paddingBottom) || 0;
+          const pl = parseFloat(computed.paddingLeft) || 0;
+
+          // Overlay covers element+margin area
+          overlay!.style.display = 'block';
+          overlay!.style.left = `${rect.left + scrollX - ml}px`;
+          overlay!.style.top = `${rect.top + scrollY - mt}px`;
+          overlay!.style.width = `${rect.width + ml + mr}px`;
+          overlay!.style.height = `${rect.height + mt + mb}px`;
+
+          // Orange border = margin area
+          overlay!.style.borderTop = `${mt}px solid rgba(246,178,107,0.4)`;
+          overlay!.style.borderRight = `${mr}px solid rgba(246,178,107,0.4)`;
+          overlay!.style.borderBottom = `${mb}px solid rgba(246,178,107,0.4)`;
+          overlay!.style.borderLeft = `${ml}px solid rgba(246,178,107,0.4)`;
+
+          // Green background = padding area
+          overlay!.style.background = 'rgba(139,195,74,0.25)';
+
+          // Inner content area (inside padding) — light blue tint
+          let contentBox = frameDoc.getElementById('bolt-hover-content');
+
+          if (!contentBox) {
+            contentBox = frameDoc.createElement('div');
+            contentBox.id = 'bolt-hover-content';
+            contentBox.style.cssText = `
+              position: absolute;
+              pointer-events: none;
+              box-sizing: border-box;
+            `;
+            overlay!.appendChild(contentBox);
+          }
+
+          contentBox.style.left = `${pl}px`;
+          contentBox.style.top = `${pt}px`;
+          contentBox.style.width = `${rect.width - pl - pr}px`;
+          contentBox.style.height = `${rect.height - pt - pb}px`;
+          contentBox.style.background = 'rgba(100,181,246,0.2)';
+        }, 120);
+      });
+
+      // Hide overlay when nothing is hovered
+      const hideHoverOverlay = () => {
+        // Cancel any pending debounce
+        if (hoverTimer) {
+          clearTimeout(hoverTimer);
+          hoverTimer = null;
+        }
+
+        const frame = editor.Canvas.getFrameEl();
+        const overlay = frame?.contentDocument?.getElementById('bolt-hover-overlay');
+
+        if (overlay) {
+          overlay.style.display = 'none';
+        }
+      };
+
+      editor.on('component:unhover', hideHoverOverlay);
+
+      // Also hide when the canvas frame loads, and inject editor-only CSS
+      editor.on('canvas:frame:load', ({ window: frameWindow }: any) => {
+        frameWindow?.document?.addEventListener('mouseleave', hideHoverOverlay);
+
+        const frameDoc = frameWindow?.document;
+
+        if (frameDoc && !frameDoc.getElementById('bolt-editor-only-styles')) {
+          const style = frameDoc.createElement('style');
+          style.id = 'bolt-editor-only-styles';
+          style.textContent = `
+            /* ── Editor-only visual indicators for layout containers ────────── */
+            /* These styles are ONLY in the canvas iframe — they never appear
+               in the preview or the exported HTML output.                      */
+
+            /* Section: visible gray fill so users can see the container */
+            [data-gjs-type="section-container"] {
+              background: rgba(180,180,180,0.35) !important;
+              border: 2px dashed rgba(180,180,180,0.6) !important;
+            }
+
+            /* Inner container */
+            [data-gjs-type="section-inner-container"] {
+              background: rgba(180,180,180,0.30) !important;
+              border: 2px dashed rgba(180,180,180,0.5) !important;
+            }
+
+            /* Flex row */
+            [data-gjs-type="flex-row"] {
+              background: rgba(180,180,180,0.30) !important;
+              border: 2px dashed rgba(180,180,180,0.5) !important;
+              border-radius: 4px;
+            }
+
+            /* Flex column */
+            [data-gjs-type="flex-col"] {
+              background: rgba(180,180,180,0.25) !important;
+              border: 2px dashed rgba(180,180,180,0.5) !important;
+              border-radius: 4px;
+            }
+
+            /* ── Placeholder labels for EMPTY layout containers ──────────── */
+            /* Shared empty-state styling */
+            [data-gjs-type="section-container"]:empty::before,
+            [data-gjs-type="section-inner-container"]:empty::before,
+            [data-gjs-type="flex-row"]:empty::before,
+            [data-gjs-type="flex-col"]:empty::before {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 100%;
+              height: 100%;
+              min-height: inherit;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-size: 13px;
+              font-weight: 500;
+              letter-spacing: 0.3px;
+              pointer-events: none;
+              border-radius: 6px;
+            }
+
+            [data-gjs-type="section-container"]:empty::before {
+              content: '⬜ Section';
+              color: rgba(139,92,246,0.5);
+              border: 2px dashed rgba(139,92,246,0.2);
+              background: rgba(139,92,246,0.03);
+            }
+
+            [data-gjs-type="section-inner-container"]:empty::before {
+              content: '⬜ Container — Drop content here';
+              color: rgba(139,92,246,0.45);
+              border: 2px dashed rgba(139,92,246,0.18);
+              background: rgba(139,92,246,0.03);
+            }
+
+            [data-gjs-type="flex-row"]:empty::before {
+              content: '⬜ Row — Drop columns here';
+              color: rgba(139,92,246,0.5);
+              border: 2px dashed rgba(139,92,246,0.2);
+              background: rgba(139,92,246,0.03);
+            }
+
+            [data-gjs-type="flex-col"]:empty::before {
+              content: '⬜ Column — Drop content here';
+              color: rgba(16,185,129,0.55);
+              border: 2px dashed rgba(16,185,129,0.2);
+              background: rgba(16,185,129,0.03);
+            }
+
+            /* ── Inner content outlines for layout children ──────────────── */
+            /* Show borders on direct children inside layout containers so
+               users can see element boundaries without hovering.             */
+            [data-gjs-type="flex-row"] > *,
+            [data-gjs-type="flex-col"] > *,
+            [data-gjs-type="section-inner-container"] > * {
+              outline: 1px dashed rgba(139,92,246,0.18);
+              outline-offset: -1px;
+            }
+          `;
+          frameDoc.head.appendChild(style);
+        }
+      });
+
+      /*
+       * ────────────────────────────────────────────────────────────────────
+       * Per-component positioning:
+       * ─ Content elements: get dmode='absolute' so users can freely
+       *   reposition them after the initial (sorter-guided) placement.
+       * ─ Sections/layout: no dmode, always snap-to-edge via the sorter.
+       * ────────────────────────────────────────────────────────────────────
+       */
+      const LAYOUT_TYPES = ['section-container', 'section-inner-container', 'flex-row', 'flex-col', 'custom-divider'];
+
+      editor.on('component:add', (component: any) => {
+        if (isSyncingFromExternalRef.current) {
+          return;
+        }
+
+        const type = component.get('type');
+
+        if (type === 'wrapper' || type === 'textnode') {
+          return;
+        }
+
+        // SECTIONS/LAYOUT: no dmode, no resize → always snap-to-edge
+        if (LAYOUT_TYPES.includes(type)) {
+          return;
+        }
+
+        // CONTENT ELEMENTS: all 8 resize handles (drag corners diagonally)
+        if (!component.get('resizable')) {
+          component.set('resizable', {
+            tl: 1,
+            tc: 1,
+            tr: 1,
+            cl: 1,
+            cr: 1,
+            bl: 1,
+            bc: 1,
+            br: 1,
+          });
+        }
       });
 
       // ── 4. Sync HTML/CSS on every component change ────────────────
