@@ -407,6 +407,39 @@ const BLOCKS = [
 </div>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="10" width="6" height="11" rx="1"/><rect x="9" y="6" width="6" height="15" rx="1"/><rect x="17" y="3" width="6" height="18" rx="1"/></svg>`,
   },
+
+  // ── Banners — Pre-styled Hero & Banner Sections ────────────────────────────
+  {
+    id: 'banner-classic-purple',
+    label: 'Hero (Purple)',
+    category: 'Banners',
+    content: `<div style="background:linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);padding:100px 24px;text-align:center;color:#fff;width:100%;box-sizing:border-box;">
+  <div style="max-width:800px;margin:0 auto;">
+    <h1 style="font-size:3.5rem;font-weight:800;margin:0 0 24px;line-height:1.1;letter-spacing:-0.02em;">Your Hero Headline<br/>Here</h1>
+    <p style="font-size:1.125rem;color:#c4b5fd;line-height:1.6;margin:0 0 40px;max-width:600px;margin-left:auto;margin-right:auto;">A compelling subheadline that explains your value proposition in one or two sentences.</p>
+    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+      <a href="#" style="padding:14px 32px;background:#8b5cf6;color:#fff;border-radius:8px;font-weight:600;text-decoration:none;transition:background 0.2s;">Click Me</a>
+      <a href="#" style="padding:14px 32px;background:#fff;color:#4c1d95;border-radius:8px;font-weight:600;text-decoration:none;transition:background 0.2s;">Get Started</a>
+      <a href="#" style="padding:14px 32px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-weight:600;text-decoration:none;transition:background 0.2s;">Learn More</a>
+      <a href="#" style="padding:14px 32px;background:#8b5cf6;color:#fff;border-radius:8px;font-weight:600;text-decoration:none;transition:background 0.2s;">Click Me</a>
+    </div>
+  </div>
+</div>`,
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2" fill="#4c1d95" stroke="#4c1d95"/><path d="M6 10h12M8 14h8" stroke="#fff" stroke-linecap="round"/></svg>`,
+  },
+  {
+    id: 'banner-simple-purple',
+    label: 'Banner (Purple)',
+    category: 'Banners',
+    content: `<div style="background:#8b5cf6;padding:64px 24px;text-align:center;color:#fff;width:100%;box-sizing:border-box;">
+  <div style="max-width:600px;margin:0 auto;">
+    <h2 style="font-size:2.5rem;font-weight:800;margin:0 0 16px;line-height:1.2;letter-spacing:-0.01em;">Ready to Get Started?</h2>
+    <p style="font-size:1.125rem;color:#ede9fe;line-height:1.6;margin:0 0 32px;">Join thousands of customers who trust us to power their business. Start your free trial today.</p>
+    <a href="#" style="display:inline-block;padding:12px 32px;background:#fff;color:#6d28d9;border-radius:8px;font-weight:600;text-decoration:none;">Start Free Trial</a>
+  </div>
+</div>`,
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2" fill="#8b5cf6" stroke="#8b5cf6"/><circle cx="12" cy="12" r="2" fill="#fff" stroke="none"/></svg>`,
+  },
 ];
 
 // ── HTML parse helpers ────────────────────────────────────────────────────
@@ -826,6 +859,47 @@ export const VisualEditor = memo(() => {
 
       // ── 3.5 Register Custom Component Behaviors ──────────────────────
 
+      // Global resizable config to fix left/top resizing in static flow
+      const resizableConfig = {
+        keyTop: 'margin-top',
+        keyLeft: 'margin-left',
+        keyWidth: 'width',
+        keyHeight: 'height',
+        tl: 1,
+        tc: 1,
+        tr: 1,
+        cl: 1,
+        cr: 1,
+        bl: 1,
+        bc: 1,
+        br: 1,
+      };
+
+      // Apply fixed resizing behavior to ALL default blocks (like headers, text, cards)
+      editor.Components.addType('default', {
+        model: {
+          defaults: {
+            resizable: resizableConfig,
+          },
+        },
+      });
+
+      editor.Components.addType('text', {
+        model: {
+          defaults: {
+            resizable: resizableConfig,
+          },
+        },
+      });
+
+      editor.Components.addType('image', {
+        model: {
+          defaults: {
+            resizable: resizableConfig,
+          },
+        },
+      });
+
       // 1. SECTION: Full-width container with centred inner container (like GrapeJS)
       editor.Components.addType('section-container', {
         model: {
@@ -833,6 +907,7 @@ export const VisualEditor = memo(() => {
             tagName: 'section',
             droppable: true,
             draggable: true,
+            resizable: resizableConfig,
             components: [
               {
                 type: 'section-inner-container',
@@ -873,6 +948,7 @@ export const VisualEditor = memo(() => {
             tagName: 'div',
             droppable: true,
             draggable: true,
+            resizable: resizableConfig,
             style: {
               display: 'flex',
               'flex-direction': 'row',
@@ -922,6 +998,7 @@ export const VisualEditor = memo(() => {
             tagName: 'div',
             droppable: true,
             draggable: true,
+            resizable: resizableConfig,
             style: {
               display: 'flex',
               flex: '1 1 0%',
@@ -969,6 +1046,7 @@ export const VisualEditor = memo(() => {
             tagName: 'hr',
             droppable: false, // Prevents dropping elements inside the divider
             draggable: true,
+            resizable: resizableConfig,
             style: {
               border: 'none',
               'border-top': '1px solid #e5e7eb',
@@ -988,44 +1066,6 @@ export const VisualEditor = memo(() => {
           media: block.media,
           attributes: { title: `Drag to add ${block.label}` },
         });
-      });
-
-      /*
-       * ── Suppress default dotted borders on ALL components ─────────────────
-       * GrapeJS's `highlightable` property controls the default dashed outline
-       * on every component. We override the default component type to turn it
-       * off globally, so the canvas looks like a clean preview.
-       * The hover/spacing canvas spots (showing padding/margin in green/orange)
-       * still work because they are separate from the highlightable system.
-       */
-      const defaultType = editor.DomComponents.getType('default');
-
-      if (defaultType) {
-        editor.DomComponents.addType('default', {
-          model: {
-            defaults: {
-              ...defaultType.model.prototype.defaults,
-              highlightable: false,
-            },
-          },
-        });
-      }
-
-      // Also strip `highlightable` from all components already loaded from HTML
-      const stripHighlightable = (component: any) => {
-        if (component.get('highlightable') !== false) {
-          component.set('highlightable', false);
-        }
-
-        component.components().forEach((child: any) => stripHighlightable(child));
-      };
-      stripHighlightable(editor.getWrapper());
-
-      // And whenever new components are added (e.g. from LLM updates)
-      editor.on('component:add', (component: any) => {
-        if (component.get('highlightable') !== false) {
-          component.set('highlightable', false);
-        }
       });
 
       /*
@@ -1163,36 +1203,6 @@ export const VisualEditor = memo(() => {
           const style = frameDoc.createElement('style');
           style.id = 'bolt-editor-only-styles';
           style.textContent = `
-            /* ── Editor-only visual indicators for layout containers ────────── */
-            /* These styles are ONLY in the canvas iframe — they never appear
-               in the preview or the exported HTML output.                      */
-
-            /* Section: visible gray fill so users can see the container */
-            [data-gjs-type="section-container"] {
-              background: rgba(180,180,180,0.35) !important;
-              border: 2px dashed rgba(180,180,180,0.6) !important;
-            }
-
-            /* Inner container */
-            [data-gjs-type="section-inner-container"] {
-              background: rgba(180,180,180,0.30) !important;
-              border: 2px dashed rgba(180,180,180,0.5) !important;
-            }
-
-            /* Flex row */
-            [data-gjs-type="flex-row"] {
-              background: rgba(180,180,180,0.30) !important;
-              border: 2px dashed rgba(180,180,180,0.5) !important;
-              border-radius: 4px;
-            }
-
-            /* Flex column */
-            [data-gjs-type="flex-col"] {
-              background: rgba(180,180,180,0.25) !important;
-              border: 2px dashed rgba(180,180,180,0.5) !important;
-              border-radius: 4px;
-            }
-
             /* ── Placeholder labels for EMPTY layout containers ──────────── */
             /* Shared empty-state styling */
             [data-gjs-type="section-container"]:empty::before,
