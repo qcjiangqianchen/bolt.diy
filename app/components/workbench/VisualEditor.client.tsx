@@ -440,6 +440,38 @@ const BLOCKS = [
 </div>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2" fill="#8b5cf6" stroke="#8b5cf6"/><circle cx="12" cy="12" r="2" fill="#fff" stroke="none"/></svg>`,
   },
+  {
+    id: 'banner-navbar',
+    label: 'Navbar',
+    category: 'Banners',
+    content: `<nav style="display:flex;justify-content:space-between;align-items:center;padding:20px 40px;background:#fff;border-bottom:1px solid #e5e7eb;width:100%;box-sizing:border-box;">
+  <div style="font-size:1.5rem;font-weight:700;color:#111827;">Website Title</div>
+  <div style="display:flex;gap:24px;">
+    <a href="#" style="text-decoration:none;color:#4b5563;font-weight:500;">Home</a>
+    <a href="#" style="text-decoration:none;color:#4b5563;font-weight:500;">About</a>
+    <a href="#" style="text-decoration:none;color:#4b5563;font-weight:500;">Services</a>
+    <a href="#" style="text-decoration:none;color:#4b5563;font-weight:500;">Contact</a>
+  </div>
+</nav>`,
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="6" rx="1"/><path d="M6 7h4M14 7h4" stroke-linecap="round"/></svg>`,
+  },
+  {
+    id: 'banner-footer',
+    label: 'Footer',
+    category: 'Banners',
+    content: `<footer style="background:#111827;color:#9ca3af;padding:48px 24px;text-align:center;width:100%;box-sizing:border-box;">
+  <div style="max-width:800px;margin:0 auto;display:flex;flex-direction:column;gap:24px;">
+    <div style="font-size:1.5rem;font-weight:700;color:#fff;">Website Title</div>
+    <div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+      <a href="#" style="text-decoration:none;color:#9ca3af;">Privacy Policy</a>
+      <a href="#" style="text-decoration:none;color:#9ca3af;">Terms of Service</a>
+      <a href="#" style="text-decoration:none;color:#9ca3af;">Contact Us</a>
+    </div>
+    <p style="margin:0;font-size:0.875rem;">&copy; 2024 Website Title. All rights reserved.</p>
+  </div>
+</footer>`,
+    media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="14" width="20" height="6" rx="1"/><path d="M6 17h12" stroke-linecap="round"/></svg>`,
+  },
 ];
 
 // ── HTML parse helpers ────────────────────────────────────────────────────
