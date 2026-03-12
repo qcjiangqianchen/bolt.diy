@@ -37,13 +37,12 @@ The year is 2025.
 </system_constraints>
 
 <technology_preferences>
-  - For web pages and websites, ALWAYS use plain HTML + CSS + vanilla JavaScript served with \`servor\`. Do NOT use React, Vite, or any framework unless the user explicitly asks for it.
+  - For web pages and websites, ALWAYS use plain HTML + CSS + vanilla JavaScript served with \`vite\`. Do NOT use React or any framework unless the user explicitly asks for it.
   - The standard project structure for a web page is:
-    - \`index.html\` — main HTML file using Tailwind utility classes (include via \`<link rel="stylesheet" href="/styles/tailwind.css">\`)
-    - \`styles/tailwind.css\` — pre-built Tailwind CSS (already available, do NOT use CDN)
+    - \`index.html\` — main HTML file using Tailwind utility classes (include via \`<script src="https://cdn.tailwindcss.com"></script>\`)
     - \`script.js\` — optional vanilla JavaScript for interactivity
-    - \`package.json\` with \`"start": "npx --yes servor . index.html 3000 --reload"\`
-  - The start command for ALL static HTML projects is ALWAYS: \`npx --yes servor . index.html 3000 --reload\`
+    - \`package.json\` with \`"start": "vite"\` and \`"devDependencies": { "vite": "^5.0.0" }\`
+  - The start command for ALL static HTML projects is ALWAYS: \`npm run start\`
   - For Dockerfile on static HTML projects, ALWAYS use nginx:
     FROM nginx:alpine
     COPY . /usr/share/nginx/html
@@ -175,7 +174,7 @@ The year is 2025.
   3. Current working directory: ${cwd}
   4. ALWAYS use latest file modifications, NEVER fake placeholder code
   5. Structure: <boltArtifact id="kebab-case" title="Title"><boltAction>...</boltAction></boltArtifact>
-
+  6. CRITICAL: YOU MUST NEVER OUTPUT RAW CODE OR MARKDOWN CODE BLOCKS (like \`\`\`html or \`\`\`js) DIRECTLY IN THE CHAT. ALL CODE CREATION AND MODIFICATION MUST BE WRAPPED INSIDE A <boltArtifact> TAG. THIS IS NON-NEGOTIABLE. DOING OTHERWISE WILL BREAK THE UI.
   Action Types:
     - shell: Running commands (use --yes for npx/npm create, && for sequences, NEVER re-run dev servers)
     - start: Starting project (use ONLY for project startup, LAST action)
@@ -189,7 +188,7 @@ The year is 2025.
 
   Action Order:
     - Create files BEFORE shell commands that depend on them
-    - Update package.json FIRST, then install dependencies
+    - CRITICAL: Update package.json FIRST, then install dependencies. You MUST ALWAYS provide a complete \`package.json\` file as the FIRST <boltAction> before providing any source code (like index.html) so that the 'start' command will not fail.
     - Configuration files before initialization commands
     - Start command LAST
 
@@ -304,12 +303,14 @@ The year is 2025.
 <boltArtifact id="start-dev-server" title="Start Vite development server">
 <boltAction type="start">
 npm run dev
+npm run start
 </boltAction>
 </boltArtifact>
 
 The development server is now running. Ready for your next instructions.</assistant_response>
   </example>
-</examples>`;
+</examples>
+`;
 
 export const CONTINUE_PROMPT = stripIndents`
   Continue your prior response. IMPORTANT: Immediately begin from where you left off without any interruptions.

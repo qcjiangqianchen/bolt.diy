@@ -9,6 +9,8 @@ const ARTIFACT_ACTION_TAG_OPEN = '<boltAction';
 const ARTIFACT_ACTION_TAG_CLOSE = '</boltAction>';
 const BOLT_QUICK_ACTIONS_OPEN = '<bolt-quick-actions>';
 const BOLT_QUICK_ACTIONS_CLOSE = '</bolt-quick-actions>';
+const TEMPLATE_SELECTOR_OPEN = '<boltTemplateSelector>';
+const TEMPLATE_SELECTOR_CLOSE = '</boltTemplateSelector>';
 
 const logger = createScopedLogger('MessageParser');
 
@@ -49,6 +51,7 @@ export interface StreamingMessageParserOptions {
 
 interface MessageState {
   position: number;
+  parsedText: string;
   insideArtifact: boolean;
   insideAction: boolean;
   artifactCounter: number;
@@ -85,6 +88,7 @@ export class StreamingMessageParser {
     if (!state) {
       state = {
         position: 0,
+        parsedText: '',
         insideAction: false,
         insideArtifact: false,
         artifactCounter: 0,
@@ -95,7 +99,6 @@ export class StreamingMessageParser {
       this.#messages.set(messageId, state);
     }
 
-    let output = '';
     let i = state.position;
     let earlyBreak = false;
 
@@ -125,9 +128,52 @@ export class StreamingMessageParser {
               ),
             );
           }
-          output += createQuickActionGroup(buttons);
+          state.parsedText += createQuickActionGroup(buttons);
           i = actionsBlockEnd + BOLT_QUICK_ACTIONS_CLOSE.length;
           continue;
+        } else {
+          break; // Wait for the complete quick actions block
+        }
+      }
+
+      if (input.startsWith(TEMPLATE_SELECTOR_OPEN, i)) {
+        const selectorBlockEnd = input.indexOf(TEMPLATE_SELECTOR_CLOSE, i);
+
+        if (selectorBlockEnd !== -1) {
+          const selectorBlockContent = input.slice(i + TEMPLATE_SELECTOR_OPEN.length, selectorBlockEnd);
+
+          const templateRegex = /<template([^>]*)\/>/g;
+          let match;
+          const templates = [];
+
+          while ((match = templateRegex.exec(selectorBlockContent)) !== null) {
+            const tagAttrs = match[1];
+            const id = this.#extractAttribute(tagAttrs, 'id') || '';
+            const title = this.#extractAttribute(tagAttrs, 'title') || '';
+            const image = this.#extractAttribute(tagAttrs, 'image') || '';
+            const description = this.#extractAttribute(tagAttrs, 'description') || '';
+            templates.push({ id, title, image, description });
+          }
+
+          state.parsedText += createTemplateSelectorElement(templates);
+          i = selectorBlockEnd + TEMPLATE_SELECTOR_CLOSE.length;
+          continue;
+        } else {
+          break; // Wait for the complete template selector block
+        }
+      }
+
+      // Check for partial tags to prevent streaming from outputting incomplete special tags
+      if (input[i] === '<' && input[i + 1] !== '/') {
+        const maxCheckLength = Math.max(BOLT_QUICK_ACTIONS_OPEN.length, TEMPLATE_SELECTOR_OPEN.length);
+        const prefix = input.slice(i, i + maxCheckLength);
+
+        if (prefix.length < BOLT_QUICK_ACTIONS_OPEN.length && BOLT_QUICK_ACTIONS_OPEN.startsWith(prefix)) {
+          break;
+        }
+
+        if (prefix.length < TEMPLATE_SELECTOR_OPEN.length && TEMPLATE_SELECTOR_OPEN.startsWith(prefix)) {
+          break;
         }
       }
 
@@ -250,7 +296,7 @@ export class StreamingMessageParser {
             const nextChar = input[j + 1];
 
             if (nextChar && nextChar !== '>' && nextChar !== ' ') {
-              output += input.slice(i, j + 1);
+              state.parsedText += input.slice(i, j + 1);
               i = j + 1;
               break;
             }
@@ -292,7 +338,7 @@ export class StreamingMessageParser {
 
               const artifactFactory = this._options.artifactElement ?? createArtifactElement;
 
-              output += artifactFactory({ messageId, artifactId });
+              state.parsedText += artifactFactory({ messageId, artifactId });
 
               i = openTagEnd + 1;
             } else {
@@ -301,7 +347,7 @@ export class StreamingMessageParser {
 
             break;
           } else if (!ARTIFACT_TAG_OPEN.startsWith(potentialTag)) {
-            output += input.slice(i, j + 1);
+            state.parsedText += input.slice(i, j + 1);
             i = j + 1;
             break;
           }
@@ -317,7 +363,7 @@ export class StreamingMessageParser {
          * Note: Auto-file-creation from code blocks is now handled by EnhancedMessageParser
          * to avoid duplicate processing and provide better shell command detection
          */
-        output += input[i];
+        state.parsedText += input[i];
         i++;
       }
 
@@ -328,7 +374,7 @@ export class StreamingMessageParser {
 
     state.position = i;
 
-    return output;
+    return state.parsedText;
   }
 
   reset() {
@@ -413,4 +459,13 @@ function createQuickActionElement(props: Record<string, string>, label: string) 
 
 function createQuickActionGroup(buttons: string[]) {
   return `<div class=\"__boltQuickAction__\" data-bolt-quick-action=\"true\">${buttons.join('')}</div>`;
+}
+
+function createTemplateSelectorElement(templates: Array<Record<string, string>>) {
+  /*
+   * We serialize the templates array into a custom data attribute.
+   * Markdown.tsx will look for this class and parse the JSON string.
+   */
+  const serializedTemplates = JSON.stringify(templates).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+  return `<div class="__boltTemplateSelector__" data-templates="${serializedTemplates}"></div>`;
 }

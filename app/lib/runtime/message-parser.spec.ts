@@ -775,7 +775,7 @@ function runTest(input: string | string[], outputOrExpectedResult: string | Expe
   for (const chunk of chunks) {
     message += chunk;
 
-    result += parser.parse('message_1', message);
+    result = parser.parse('message_1', message);
   }
 
   for (const name in expected.callbacks) {

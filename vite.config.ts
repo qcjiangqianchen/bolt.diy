@@ -97,6 +97,9 @@ export default defineConfig((config) => {
       // dynamically via import('grapesjs') inside useEffect.
       external: ['grapesjs'],
     },
+    server: {
+      allowedHosts: true,
+    },
   };
 });
 

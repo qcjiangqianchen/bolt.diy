@@ -113,11 +113,34 @@ function detectProject(files: Record<string, string>): ProjectDetection {
     result.startCommand = files['main.py'] ? 'python main.py' : 'python app.py';
   }
 
-  // Check for static site (HTML files, no package.json)
-  if (result.type === 'unknown' && files['index.html']) {
-    result.type = 'static';
-    result.startCommand = '';
-    result.buildOutputDir = '.';
+  // Check for static site (HTML files)
+  if (files['index.html']) {
+    /*
+     * If it's a Node project but only uses Vite for a simple HTML site with no build script,
+     * it's effectively static for production. We check the package.json scripts or dependencies.
+     */
+    let isViteBased = false;
+
+    if (files['package.json']) {
+      try {
+        const pkg = JSON.parse(files['package.json']);
+        isViteBased =
+          pkg.scripts?.start?.includes('vite') ||
+          pkg.scripts?.dev?.includes('vite') ||
+          !!pkg.dependencies?.vite ||
+          !!pkg.devDependencies?.vite;
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    const isVanillaVite = result.type === 'node' && !result.hasBuildScript && isViteBased;
+
+    if (result.type === 'unknown' || isVanillaVite) {
+      result.type = 'static';
+      result.startCommand = '';
+      result.buildOutputDir = '.';
+    }
   }
 
   return result;
@@ -162,6 +185,48 @@ function generateDockerfile(detection: ProjectDetection): string {
             : 'COPY package-lock.json ./';
 
       if (detection.hasBuildScript) {
+        // If it's a Vite project or similar static build, use Nginx for production stage
+        const isStaticApp =
+          detection.buildOutputDir === 'dist' ||
+          detection.buildOutputDir === 'build' ||
+          detection.buildOutputDir === '.output';
+
+        if (isStaticApp) {
+          return `# ---- Build Stage ----
+FROM node:${detection.nodeVersion}-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependency manifests
+COPY package.json ./
+${copyLockfile ? copyLockfile + '\n' : ''}
+# Install all dependencies (including dev)
+RUN ${installCmd}
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN ${detection.buildCommand}
+
+# ---- Production Stage ----
+FROM nginx:alpine
+
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy custom nginx config
+COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf || true
+
+# Copy built artifacts from builder
+COPY --from=builder /app/${detection.buildOutputDir} /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+`;
+        }
+
         return `# ---- Build Stage ----
 FROM node:${detection.nodeVersion}-alpine AS builder
 

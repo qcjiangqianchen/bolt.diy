@@ -167,36 +167,22 @@ export async function streamText(props: {
   const clarificationBlock =
     isFirstMessage && !hasExistingProject
       ? `
-FIRST MESSAGE BEHAVIOR — CLARIFICATION PHASE:
-When the user sends their FIRST message describing a new project, do NOT immediately generate code.
-Instead, respond with:
-1. A brief, enthusiastic acknowledgment of what they want to build (1-2 sentences).
-2. Then ask 3-5 targeted clarifying questions to understand their preferences. Format them as a numbered list with labeled options. Cover topics like:
-   - Visual style / design direction (modern, minimal, bold, playful, etc.)
-   - Key features or sections they want
-   - Content detail level (brief overview vs. rich detailed content)
-   - Interactive elements (animations, hover effects, static)
-   - Tech preferences if relevant (static HTML, React, etc.)
-3. Keep questions concise with clear a/b/c options so the user can reply quickly (e.g. "1. a, 2. c, 3. b").
-4. Do NOT include any <boltArtifact> tags in your clarification response.
-5. Once the user replies with their preferences, THEN generate the full project with <boltArtifact> incorporating all their choices.
+FIRST MESSAGE BEHAVIOR:
+When the user sends their FIRST message describing a new project:
+1. Briefly acknowledge their request.
+2. If they didn't provide a specific design style, offer them 3 visual templates using the <boltTemplateSelector> tag.
+Example:
+"Let's build your new site! Please select a template to start with:
+<boltTemplateSelector>
+  <template id="SaaS-dark" title="Sleek Dark Mode" image="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80" description="A modern, dark-themed template."/>
+</boltTemplateSelector>"
 
-Example clarification response:
-"That sounds great! A tennis hub with sport info, events, and season highlights — let's make it shine.
+3. Wait for the user to reply with their template choice.
 
-Before I start building, a few quick questions:
-
-1. **Visual Style** — What feel should the page have? a. Modern & sleek with dark theme b. Clean & bright with white space c. Bold & colorful with vibrant accents d. Sports magazine editorial style
-
-2. **Images** — Should I include images? a. Yes, professional stock photos b. Placeholder areas for your own images c. No images, text-focused
-
-3. **Interactive Elements** — How interactive? a. Animations, hover effects, and smooth transitions b. Subtle hover effects only c. Static, clean design
-
-4. **Tech Stack** — What framework? a. Static HTML/CSS/JS (simplest) b. React with Vite (component-based) c. You decide based on what's best
-
-Just reply with your choices (e.g. '1. a, 2. a, 3. a, 4. b') and I'll build it!"
-
-`
+CRITICAL RULES FOR FIRST MESSAGE:
+- You should try to wait for the user to reply and NOT generate code.
+- HOWEVER, IF you do generate code anyway, YOU MUST wrap all code inside a <boltArtifact> tag.
+- NEVER output raw code in the chat. Always use <boltArtifact>.`
       : '';
 
   const finalSystemMessage =
@@ -215,6 +201,7 @@ If you encounter an issue or the user's request is unclear:
 - If you can still partially fulfill the request, do so and explain what's missing
 
 IMPORTANT RULES:
+- ALWAYS, ALWAYS wrap ALL generated code inside a <boltArtifact> block. NEVER output raw markdown code blocks (like \`\`\`html) directly into the chat response under any circumstances.
 - When modifying code, check CONTEXT BUFFER for current files. Only include files that need changes — do NOT recreate unchanged files.
 - You MUST create ALL files that are imported or referenced. If a file imports "./styles.css", you MUST include a boltAction to create "styles.css". Never reference a file without creating it first.
 - Always create complete, working projects with no missing files.
@@ -222,7 +209,9 @@ IMPORTANT RULES:
 
 FOR STATIC HTML PROJECTS (no framework, just HTML/CSS/JS):
 - You MUST still create a package.json with a start script
-- Use npx --yes servor as the start command
+- Make sure package.json is the FIRST file you create.
+- Use npm run start as the start command
+- YOU MUST run <boltAction type="shell">npm install</boltAction> AFTER creating package.json and BEFORE the start action.
 - Example for a static site:
 
 I'll set up a simple static website for you.
@@ -231,14 +220,18 @@ I'll set up a simple static website for you.
 <boltAction type="file" filePath="package.json">{
   "name": "my-project",
   "scripts": {
-    "start": "npx --yes servor ."
+    "start": "vite"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
   }
 }</boltAction>
 <boltAction type="file" filePath="index.html">
 <!DOCTYPE html>
 ...complete HTML content...
 </boltAction>
-<boltAction type="start">npx --yes servor .</boltAction>
+<boltAction type="shell">npm install</boltAction>
+<boltAction type="start">npm run start</boltAction>
 </boltArtifact>
 
 The site is now running! You can see it in the preview panel.

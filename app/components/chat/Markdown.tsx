@@ -5,6 +5,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { rehypePlugins, remarkPlugins, allowedHTMLElements } from '~/utils/markdown';
 import { Artifact, openArtifactInWorkbench } from './Artifact';
 import { CodeBlock } from './CodeBlock';
+import { TemplateSelector } from './TemplateSelector';
 import type { Message } from 'ai';
 import styles from './Markdown.module.scss';
 import ThoughtBox from './ThoughtBox';
@@ -84,6 +85,22 @@ export const Markdown = memo(
             return <ThoughtBox title="Thought process">{children}</ThoughtBox>;
           }
 
+          if (className?.includes('__boltTemplateSelector__')) {
+            const templatesDataAttr = node?.properties.dataTemplates as string;
+
+            let templates: any[] = [];
+
+            if (templatesDataAttr) {
+              try {
+                templates = JSON.parse(templatesDataAttr);
+              } catch (e) {
+                console.error('Failed to parse templates data:', e);
+              }
+            }
+
+            return <TemplateSelector templates={templates} append={append} />;
+          }
+
           if (className?.includes('__boltQuickAction__') || dataProps?.dataBoltQuickAction) {
             return <div className="flex items-center gap-2 flex-wrap mt-3.5">{children}</div>;
           }
@@ -108,7 +125,26 @@ export const Markdown = memo(
             const { className, ...rest } = firstChild.properties;
             const [, language = 'plaintext'] = /language-(\w+)/.exec(String(className) || '') ?? [];
 
-            return <CodeBlock code={firstChild.children[0].value} language={language as BundledLanguage} {...rest} />;
+            const codeString = firstChild.children[0].value as string;
+
+            // Handle 14b models hallucinating the template selector inside a code block
+            if (codeString.includes('__boltTemplateSelector__')) {
+              const match = codeString.match(/data-templates="([^"]+)"/);
+
+              if (match && match[1]) {
+                try {
+                  // Unescape HTML entities before parsing
+                  const unescaped = match[1].replace(/&quot;/g, '"');
+                  const templates = JSON.parse(unescaped);
+
+                  return <TemplateSelector templates={templates} append={append} />;
+                } catch (e) {
+                  console.error('Failed to parse template selector inside code block', e);
+                }
+              }
+            }
+
+            return <CodeBlock code={codeString} language={language as BundledLanguage} {...rest} />;
           }
 
           return <pre {...rest}>{children}</pre>;
