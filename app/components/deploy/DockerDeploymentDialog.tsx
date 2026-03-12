@@ -205,6 +205,7 @@ export function DockerDeploymentDialog({
           files: packageFiles,
           flyAppName: flyAppName || imageName,
           flyRegion,
+          boltUrl: import.meta.env.VITE_PUBLIC_BOLT_URL || window.location.origin,
         }),
       });
 

@@ -363,7 +363,21 @@ async function handleFlyDeploy(
      * boltUrl comes from window.location.origin in the browser — no configuration needed
      */
     if (boltUrl && files['index.html']) {
-      const trackerScript = `<script>(function(){var _boltApp=${JSON.stringify(flyAppName)},_boltUrl=${JSON.stringify(boltUrl.replace(/\/$/, ''))};function _boltTrack(p){try{fetch(_boltUrl+'/api/analytics?app='+encodeURIComponent(_boltApp)+'&path='+encodeURIComponent(p||'/')+'&sid='+(sessionStorage._boltSid||(sessionStorage._boltSid=Math.random().toString(36).slice(2))),{method:'POST',keepalive:true}).catch(function(){});}catch(e){}}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){_boltTrack(location.pathname);});}else{_boltTrack(location.pathname);}var _hp=history.pushState;history.pushState=function(){_hp.apply(this,arguments);_boltTrack(location.pathname);};window.addEventListener('popstate',function(){_boltTrack(location.pathname);});}());</script>`;
+      const trackerScript = `<script>(function(){
+        var _boltApp=${JSON.stringify(flyAppName)}, _boltUrl=${JSON.stringify(boltUrl.trim().replace(/\/$/, ''))};
+        function _boltTrack(p){
+          try{
+            var s=window.sessionStorage, sid;
+            try { sid = s._boltSid || (s._boltSid = Math.random().toString(36).slice(2)); } catch(e) { sid = 'anon-' + Math.random().toString(36).slice(2); }
+            var img=new Image();
+            img.src=_boltUrl+'/api/stats?app='+encodeURIComponent(_boltApp)+'&path='+encodeURIComponent(p||'/')+'&sid='+encodeURIComponent(sid)+'&ngrok-skip-browser-warning=1&t='+Date.now();
+          }catch(e){}
+        }
+        if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){_boltTrack(location.pathname);});}
+        else{_boltTrack(location.pathname);}
+        var _hp=history.pushState; history.pushState=function(){_hp.apply(this,arguments);_boltTrack(location.pathname);};
+        window.addEventListener('popstate',function(){_boltTrack(location.pathname);});
+      }());</script>`;
       files['index.html'] = files['index.html'].replace('</body>', trackerScript + '</body>');
 
       if (!files['index.html'].includes(trackerScript)) {

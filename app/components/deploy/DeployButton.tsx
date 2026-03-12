@@ -110,7 +110,7 @@ export const DeployButton = ({ onGitLabDeploy: _onGitLabDeploy }: DeployButtonPr
           files: result.files,
           flyAppName,
           flyRegion: 'iad',
-          boltUrl: window.location.origin, // automatically determined — no config needed
+          boltUrl: import.meta.env.VITE_PUBLIC_BOLT_URL || window.location.origin, // Check for externally resolvable URL
         }),
       });
 

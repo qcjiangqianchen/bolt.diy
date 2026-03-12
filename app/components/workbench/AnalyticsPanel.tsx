@@ -31,7 +31,7 @@ export const AnalyticsPanel = memo(() => {
     setError(null);
 
     try {
-      const resp = await fetch(`/api/analytics?app=${encodeURIComponent(appName)}`);
+      const resp = await fetch(`/api/stats?app=${encodeURIComponent(appName)}`);
 
       if (!resp.ok) {
         throw new Error(`Failed to load analytics (${resp.status})`);
@@ -103,8 +103,33 @@ export const AnalyticsPanel = memo(() => {
             <span className={`i-ph:arrow-clockwise text-sm ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+          <button
+            onClick={() => ((window as any)._boltShowAnalyticsDebug = !(window as any)._boltShowAnalyticsDebug)}
+            className="opacity-0 hover:opacity-10 w-2 h-2"
+          />
         </div>
       </div>
+
+      {/* Diagnostics (Hidden by default, click empty space near refresh to toggle) */}
+      {(window as any)._boltShowAnalyticsDebug && (
+        <div className="mx-4 mt-3 p-3 rounded-lg bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor text-[10px] font-mono whitespace-pre text-bolt-elements-textSecondary shrink-0">
+          <div>Internal ID: {appName}</div>
+          <div>Public URL: {import.meta.env.VITE_PUBLIC_BOLT_URL || 'NONE (using localhost)'}</div>
+          <div>Memory Store: {data?.totalViews ?? 0} events</div>
+          <button
+            onClick={() => {
+              const base = (import.meta.env.VITE_PUBLIC_BOLT_URL || window.location.origin).trim();
+              const url = `${base}/api/stats?app=ping-test&path=manual-ping&sid=test&ngrok-skip-browser-warning=1&t=${Date.now()}`;
+              const img = new Image();
+              img.src = url;
+              alert('Ping Request Sent! Check your Bolt terminal for "Beacon received: app=ping-test".');
+            }}
+            className="mt-2 px-2 py-1 bg-purple-500 text-white rounded text-[8px]"
+          >
+            Test Connection (Ping)
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mx-4 mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-500 flex items-center gap-2 shrink-0">
@@ -223,7 +248,7 @@ export const AnalyticsPanel = memo(() => {
                 <a href={deployedUrl} target="_blank" rel="noopener noreferrer" className="underline">
                   {deployedUrl.replace('https://', '')}
                 </a>
-                . Make sure <code className="bg-amber-500/20 px-1 rounded">PUBLIC_BOLT_URL</code> is set in your
+                . Make sure <code className="bg-amber-500/20 px-1 rounded">VITE_PUBLIC_BOLT_URL</code> is set in your
                 bolt.diy environment so the tracker script can reach this server.
               </div>
             </div>
