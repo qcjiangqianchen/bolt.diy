@@ -364,19 +364,21 @@ async function handleFlyDeploy(
      */
     if (boltUrl && files['index.html']) {
       const trackerScript = `<script>(function(){
-        var _boltApp=${JSON.stringify(flyAppName)}, _boltUrl=${JSON.stringify(boltUrl.trim().replace(/\/$/, ''))};
-        function _boltTrack(p){
+        var _ba=${JSON.stringify(flyAppName)}, _bu=${JSON.stringify(boltUrl.trim().replace(/\/$/, ''))};
+        function _bt(p){
           try{
+            console.log('[Bolt Telemetry] Generating beacon for ' + _ba);
             var s=window.sessionStorage, sid;
-            try { sid = s._boltSid || (s._boltSid = Math.random().toString(36).slice(2)); } catch(e) { sid = 'anon-' + Math.random().toString(36).slice(2); }
-            var img=new Image();
-            img.src=_boltUrl+'/api/stats?app='+encodeURIComponent(_boltApp)+'&path='+encodeURIComponent(p||'/')+'&sid='+encodeURIComponent(sid)+'&ngrok-skip-browser-warning=1&t='+Date.now();
-          }catch(e){}
+            try { sid = s._bs || (s._bs = Math.random().toString(36).slice(2)); } catch(e) { sid = 'a-' + Math.random().toString(36).slice(2); }
+            var url = _bu + '/api/v1/telemetry?_ta=' + encodeURIComponent(_ba) + '&_tp=' + encodeURIComponent(p||'/') + '&_ts=' + encodeURIComponent(sid) + '&ngrok-skip-browser-warning=1&_cb=' + Date.now();
+            fetch(url, { method: 'POST', mode: 'no-cors', cache: 'no-cache' });
+            console.log('[Bolt Telemetry] Beacon Dispatched!');
+          }catch(e){ console.error('[Bolt Telemetry] Error:', e); }
         }
-        if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){_boltTrack(location.pathname);});}
-        else{_boltTrack(location.pathname);}
-        var _hp=history.pushState; history.pushState=function(){_hp.apply(this,arguments);_boltTrack(location.pathname);};
-        window.addEventListener('popstate',function(){_boltTrack(location.pathname);});
+        if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){_bt(location.pathname);});}
+        else{_bt(location.pathname);}
+        var _hp=history.pushState; history.pushState=function(){_hp.apply(this,arguments);_bt(location.pathname);};
+        window.addEventListener('popstate',function(){_bt(location.pathname);});
       }());</script>`;
       files['index.html'] = files['index.html'].replace('</body>', trackerScript + '</body>');
 

@@ -31,7 +31,7 @@ export const AnalyticsPanel = memo(() => {
     setError(null);
 
     try {
-      const resp = await fetch(`/api/stats?app=${encodeURIComponent(appName)}`);
+      const resp = await fetch(`/api/v1/telemetry?app=${encodeURIComponent(appName)}&t=${Date.now()}`);
 
       if (!resp.ok) {
         throw new Error(`Failed to load analytics (${resp.status})`);
@@ -50,8 +50,8 @@ export const AnalyticsPanel = memo(() => {
   useEffect(() => {
     fetchAnalytics();
 
-    // Auto-refresh every 30 seconds
-    const timer = setInterval(fetchAnalytics, 30000);
+    // Auto-refresh every 10 seconds
+    const timer = setInterval(fetchAnalytics, 10000);
 
     return () => clearInterval(timer);
   }, [fetchAnalytics]);
@@ -119,10 +119,9 @@ export const AnalyticsPanel = memo(() => {
           <button
             onClick={() => {
               const base = (import.meta.env.VITE_PUBLIC_BOLT_URL || window.location.origin).trim();
-              const url = `${base}/api/stats?app=ping-test&path=manual-ping&sid=test&ngrok-skip-browser-warning=1&t=${Date.now()}`;
-              const img = new Image();
-              img.src = url;
-              alert('Ping Request Sent! Check your Bolt terminal for "Beacon received: app=ping-test".');
+              const url = `${base}/api/v1/telemetry?_ta=${encodeURIComponent(appName!)}&_tp=/ping&_ts=test-session&ngrok-skip-browser-warning=1&_cb=${Date.now()}`;
+              fetch(url, { method: 'POST', mode: 'no-cors', cache: 'no-cache' });
+              alert(`Ping Dispatched for ${appName}! Look at your Bolt terminal for "Incoming Hit Detected!".`);
             }}
             className="mt-2 px-2 py-1 bg-purple-500 text-white rounded text-[8px]"
           >

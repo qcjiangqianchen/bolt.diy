@@ -11,13 +11,17 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
 
-const logger = createScopedLogger('api.stats');
+const logger = createScopedLogger('api.telemetry');
 
-/*
- * In-memory store as fallback (and primary store for serverless-style runtimes)
- * For Node.js runtime, we also persist to a temp file
- */
-const inMemoryStore = new Map<string, PageViewEvent[]>();
+// Compatibility hint for the browser to allow cross-origin hits
+const TELEMETRY_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, ngrok-skip-browser-warning, Accept, X-Requested-With',
+  'Access-Control-Max-Age': '86400',
+  'Cross-Origin-Resource-Policy': 'cross-origin', // CRITICAL for COEP pages
+  'Timing-Allow-Origin': '*',
+};
 
 interface PageViewEvent {
   ts: string; // ISO timestamp
@@ -25,18 +29,7 @@ interface PageViewEvent {
   sid: string; // session id
 }
 
-const ANALYTICS_CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, ngrok-skip-browser-warning, Accept, X-Requested-With',
-  'Access-Control-Max-Age': '86400',
-  'Cross-Origin-Resource-Policy': 'cross-origin',
-  'Timing-Allow-Origin': '*',
-};
-
-function getCorsHeaders(_request: Request) {
-  return ANALYTICS_CORS_HEADERS;
-}
+const inMemoryStore = new Map<string, PageViewEvent[]>();
 
 async function getDataFilePath(appName: string): Promise<string> {
   const os = await import('node:os');
@@ -51,6 +44,10 @@ async function readEvents(appName: string): Promise<PageViewEvent[]> {
     return inMemoryStore.get(appName)!;
   }
 
+  return readEventsFromDisk(appName);
+}
+
+async function readEventsFromDisk(appName: string): Promise<PageViewEvent[]> {
   try {
     const { readFile } = await import('node:fs/promises');
     const filePath = await getDataFilePath(appName);
@@ -71,17 +68,14 @@ async function appendEvent(appName: string, event: PageViewEvent): Promise<void>
 
   // Persist to disk when running in Node.js
   try {
-    const { writeFile, mkdir } = await import('node:fs/promises');
-    const path = await import('node:path');
+    const { writeFile } = await import('node:fs/promises');
     const filePath = await getDataFilePath(appName);
-    const dir = path.dirname(filePath);
-    await mkdir(dir, { recursive: true });
-    await writeFile(filePath, JSON.stringify(events), 'utf-8');
 
-    // Clear memory store so next read forces a fresh disk capture
-    inMemoryStore.delete(appName);
-    console.log(`[Analytics] Persisted event for ${appName} to ${filePath}`);
-  } catch {
+    await writeFile(filePath, JSON.stringify(events), 'utf-8');
+    console.log(`[Telemetry] Persisted hit for ${appName}. Total: ${events.length}`);
+  } catch (error: any) {
+    console.error(`[Telemetry] DISK ERROR for ${appName}:`, error.message || error);
+
     // Disk persistence not available (edge runtime) — memory-only is fine
   }
 }
@@ -147,18 +141,16 @@ function aggregateEvents(events: PageViewEvent[]) {
   return { totalViews, uniqueSessions, topPages, viewsByHour, viewsByDay };
 }
 
-/** Handle stats fetching or record a view via image beacon */
+/** Handle stats fetching or record a view via no-cors POST beacon */
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  console.log(`[Analytics] Request received: ${request.method} ${url.pathname}${url.search}`);
-
-  const corsHeaders = getCorsHeaders(request);
+  const corsHeaders = TELEMETRY_HEADERS;
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  const appName = url.searchParams.get('app');
+  const appName = url.searchParams.get('_ta') || url.searchParams.get('app');
 
   if (!appName) {
     return new Response(JSON.stringify({ error: 'Missing app parameter' }), {
@@ -167,107 +159,65 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Check if this is a tracking request (beacon)
-  const isBeacon = url.searchParams.has('path') || url.searchParams.has('sid');
-
-  if (isBeacon) {
-    const pagePath = url.searchParams.get('path') || '/';
-    const sid = url.searchParams.get('sid') || 'unknown-' + Math.random().toString(36).slice(2, 7);
-
-    try {
-      const event: PageViewEvent = {
-        ts: new Date().toISOString(),
-        path: pagePath,
-        sid,
-      };
-      await appendEvent(appName, event);
-
-      console.log(`[Analytics] Beacon received: app=${appName}, path=${pagePath}, sid=${sid}`);
-
-      // Return a 1x1 transparent GIF
-      return new Response(
-        Uint8Array.from([
-          0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00,
-          0x00, 0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
-          0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3b,
-        ]),
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'image/gif',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Access-Control-Allow-Origin': '*',
-            'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Timing-Allow-Origin': '*',
-          },
-        },
-      );
-    } catch {
-      // Fall through to error response
-    }
-  }
-
+  // Handle Dashboard GET Data request
   try {
-    const events = await readEvents(appName);
+    const forceRefresh = url.searchParams.has('t') || url.searchParams.has('_cb');
+    const events = forceRefresh ? await readEventsFromDisk(appName) : await readEvents(appName);
     const data = aggregateEvents(events);
 
     return new Response(JSON.stringify(data), {
       status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Telemetry-Status': 'ready',
+      },
     });
   } catch (error) {
-    logger.error('Failed to read analytics:', error);
-    return new Response(JSON.stringify({ error: 'Failed to read analytics' }), {
+    logger.error('Failed to read telemetry:', error);
+    return new Response(JSON.stringify({ error: 'Failed to read telemetry' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }
 }
 
-/** Record a page view event */
+/** Record a page view event via POST (robust against CORS/COEP) */
 export async function action({ request }: ActionFunctionArgs) {
-  const corsHeaders = getCorsHeaders(request);
+  const corsHeaders = TELEMETRY_HEADERS;
 
   // CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: corsHeaders,
-    });
-  }
-
   const url = new URL(request.url);
-  const appName = url.searchParams.get('app');
-  const pagePath = url.searchParams.get('path') || '/';
-  const sid = url.searchParams.get('sid') || 'unknown';
-
-  console.log(`[Analytics] Data received: app=${appName}, path=${pagePath}`);
+  const appName = url.searchParams.get('_ta') || url.searchParams.get('app');
+  const pagePath = url.searchParams.get('_tp') || url.searchParams.get('path') || '/';
+  const sid = url.searchParams.get('_ts') || url.searchParams.get('sid') || 'unknown';
 
   if (!appName) {
-    return new Response(JSON.stringify({ error: 'Missing app parameter' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    });
+    return new Response(null, { status: 204, headers: corsHeaders }); // Silent fail for beacons
   }
 
   try {
+    console.log(`[Telemetry] Incoming Hit Detected! App: ${appName} Path: ${pagePath}`);
+
     const event: PageViewEvent = {
       ts: new Date().toISOString(),
       path: pagePath,
-      sid,
+      sid: sid.slice(0, 32),
     };
+
     await appendEvent(appName, event);
 
-    return new Response(null, { status: 204, headers: corsHeaders });
-  } catch (error) {
-    logger.error('Failed to record analytics event:', error);
-    return new Response(JSON.stringify({ error: 'Failed to record event' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
     });
+  } catch (error: any) {
+    console.error(`[Telemetry] Hit Failed to Persist:`, error.message);
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 }
