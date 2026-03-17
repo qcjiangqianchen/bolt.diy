@@ -306,22 +306,23 @@ export class BoltShell {
 
       /*
        * Check if command completion signal with exit code
-       * CRITICAL: We MUST match against the buffer because the signal could be split across chunks
+       * CRITICAL: We MUST match against the buffer in a loop because multiple signals
+       * could be present in the same chunk (e.g., 'exit' followed immediately by 'prompt')
        */
-      const oscMatch = buffer.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/);
+      let oscMatch;
 
-      if (oscMatch) {
+      while ((oscMatch = buffer.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/)) !== null) {
         const [, osc, , , code] = oscMatch;
 
         if (osc === 'exit') {
           exitCode = parseInt(code, 10);
         }
 
-        // Clear buffer up to the end of the signal
+        // Clear buffer up to the end of the current signal
         buffer = buffer.slice(oscMatch.index! + oscMatch[0].length);
 
         if (osc === waitCode) {
-          break;
+          return { output: fullOutput, exitCode };
         }
       }
     }
