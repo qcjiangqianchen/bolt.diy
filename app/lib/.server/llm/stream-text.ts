@@ -240,9 +240,9 @@ FOR STATIC HTML PROJECTS (no framework, just HTML/CSS/JS):
 - YOU MUST run <boltAction type="shell">npm install</boltAction> AFTER creating package.json and BEFORE the start action.
 - Example for a static site:
 
-I'll set up a simple static website for you.
+I'll set up a premium, dark-themed static website for you.
 
-<boltArtifact id="project" title="Project Title">
+<boltArtifact id="project" title="Premium Static Website">
 <boltAction type="file" filePath="package.json">{
   "name": "my-project",
   "scripts": {
@@ -254,7 +254,69 @@ I'll set up a simple static website for you.
 }</boltAction>
 <boltAction type="file" filePath="index.html">
 <!DOCTYPE html>
-...complete HTML content...
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premium Project</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 font-sans text-slate-200 antialiased min-h-screen">
+  <nav class="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-white/10 px-6 py-4">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <span class="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">PREMIUM</span>
+      <div class="hidden md:flex gap-8 text-sm font-medium tracking-wide">
+        <a href="#" class="text-slate-300 hover:text-white transition-colors">Platform</a>
+        <a href="#" class="text-slate-300 hover:text-white transition-colors">Solutions</a>
+        <a href="#" class="text-slate-300 hover:text-white transition-colors">Pricing</a>
+      </div>
+      <button class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-full text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20">Get Started</button>
+    </div>
+  </nav>
+
+  <main>
+    <section class="relative pt-24 pb-32 px-6 overflow-hidden text-center">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#312e81,transparent)] opacity-40"></div>
+      <div class="max-w-7xl mx-auto relative z-10">
+        <h1 class="text-6xl md:text-8xl font-black tracking-tighter text-white mb-8 leading-[1.1]">
+          The Future of <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400">Innovation</span>
+        </h1>
+        <p class="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">
+          Scale your business with our world-class, premium digital solutions tailored for the next generation.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-5 justify-center">
+          <button class="bg-white text-slate-950 px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-200 transition-all shadow-xl">Start Building Now</button>
+          <button class="bg-white/5 backdrop-blur-md border border-white/10 px-10 py-4 rounded-full font-bold text-lg hover:border-white/30 transition-all">Watch Demo</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="max-w-7xl mx-auto px-6 py-24 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <!-- 8 Feature cards... -->
+      <div class="group p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-indigo-500/50 transition-all hover:-translate-y-2">
+        <div class="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-3">Lightning Fast</h3>
+        <p class="text-slate-400 leading-relaxed text-sm">Optimized performance engines delivering sub-millisecond response times across global availability zones.</p>
+      </div>
+      <!-- Repeat 7 more unique cards here... -->
+    </section>
+
+    <!-- More sections: Gallery, Data List, FAQ, etc. -->
+  </main>
+
+  <footer class="bg-slate-950 px-6 py-20 border-t border-white/10">
+    <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-12 text-sm text-slate-500">
+      <div class="col-span-2 md:col-span-1">
+        <span class="text-xl font-bold text-white mb-6 block">PREMIUM</span>
+        <p class="leading-relaxed mb-6">Building the next generation of high-fidelity digital infrastructure.</p>
+      </div>
+      <!-- Footer columns... -->
+    </div>
+  </footer>
+</body>
+</html>
 </boltAction>
 <boltAction type="shell">npm install</boltAction>
 <boltAction type="start">npm run start</boltAction>
@@ -266,20 +328,175 @@ FOR REACT/VITE PROJECTS:
 - Create package.json with dependencies and dev script
 - ALWAYS run <boltAction type="shell">npm install</boltAction> BEFORE the start action
 - Then start with <boltAction type="start">npm run dev</boltAction>
-- Example:
+- Example for a React app:
 
-I'll create a React app for you. Let me set up the project structure and install dependencies.
+I'll create a premium React application for you.
 
-<boltArtifact id="react-app" title="React App">
+<boltArtifact id="react-app" title="Premium React Application">
 <boltAction type="file" filePath="package.json">{
   "name": "my-app",
   "scripts": { "dev": "vite" },
   "dependencies": { "react": "^18.2.0", "react-dom": "^18.2.0" },
-  "devDependencies": { "@vitejs/plugin-react": "^3.1.0", "vite": "^4.2.0" }
+  "devDependencies": { "@vitejs/plugin-react": "^3.1.0", "vite": "^4.2.0", "autoprefixer": "^10.4.18", "postcss": "^8.4.35", "tailwindcss": "^3.4.1" }
 }</boltAction>
-<boltAction type="file" filePath="index.html">...</boltAction>
-<boltAction type="file" filePath="src/main.jsx">...</boltAction>
-<boltAction type="file" filePath="src/App.jsx">...</boltAction>
+<boltAction type="file" filePath="index.html">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React App</title>
+  </head>
+  <body class="bg-slate-950">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</boltAction>
+<boltAction type="file" filePath="tailwind.config.js">
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        primary: { 950: '#020617', 900: '#0f172a' }
+      }
+    },
+  },
+  plugins: [],
+}
+</boltAction>
+<boltAction type="file" filePath="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body { @apply text-slate-200 antialiased; }
+}
+</boltAction>
+<boltAction type="file" filePath="src/main.jsx">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+</boltAction>
+<boltAction type="file" filePath="src/App.jsx">
+import React from 'react';
+import { Rocket, Shield, Zap, Globe, Cpu, BarChart3, Users, MessageSquare } from 'lucide-react';
+
+const FeatureCard = ({ icon: Icon, title, description }) => (
+  <div className="group p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-indigo-500/50 transition-all hover:-translate-y-2">
+    <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-6 transition-colors group-hover:bg-indigo-500/30">
+      <Icon className="w-6 h-6 text-indigo-400" />
+    </div>
+    <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
+    <p className="text-slate-400 leading-relaxed text-sm">{description}</p>
+  </div>
+);
+
+export default function App() {
+  const features = [
+    { icon: Rocket, title: "Swift Deployment", description: "Automated CI/CD pipelines ensuring your code reaches production in seconds." },
+    { icon: Shield, title: "Enterprise Security", description: "Military-grade encryption and advanced security protocols protecting your data." },
+    { icon: Zap, title: "Peak Performance", description: "Optimized runtime environments delivering sub-millisecond response times." },
+    { icon: Globe, title: "Global Scale", description: "Edge infrastructure spanning 200+ global availability zones." },
+    { icon: Cpu, title: "AI Integration", description: "Native support for advanced LLMs and neural processing units." },
+    { icon: BarChart3, title: "Real-time Analytics", description: "Deep insights and behavioral tracking with live-streaming metrics." },
+    { icon: Users, title: "Team Collaboration", description: "Seamless multi-user editing and dynamic permission management." },
+    { icon: MessageSquare, title: "Omnichannel Support", description: "Integrated communication layers across all customer touchpoints." }
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-200 antialiased select-none">
+      <nav className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center text-sm font-medium">
+          <span className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">PREMIUM</span>
+          <div className="hidden md:flex gap-8 text-slate-400">
+            <a href="#" className="hover:text-white transition-colors underline decoration-transparent hover:decoration-indigo-500 underline-offset-8 decoration-2 duration-300">Platform</a>
+            <a href="#" className="hover:text-white transition-colors">Solutions</a>
+            <a href="#" className="hover:text-white transition-colors">Enterprise</a>
+            <a href="#" className="hover:text-white transition-colors">Pricing</a>
+          </div>
+          <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-full font-semibold transition-all">Get Started</button>
+        </div>
+      </nav>
+
+      <main>
+        <section className="relative pt-32 pb-48 px-6 text-center overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#312e81,transparent)] opacity-40 animate-pulse"></div>
+          <div className="max-w-7xl mx-auto relative z-10">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-indigo-400 text-xs font-bold mb-8 tracking-[0.2em] uppercase">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+              </span>
+              Now Processing Version 2025
+            </div>
+            <h1 className="text-6xl md:text-9xl font-black text-white mb-12 tracking-tight leading-[0.9]">
+              Engineering the <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400">Future</span>
+            </h1>
+            <p className="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto mb-16 font-light leading-relaxed">
+              Scale your business with world-class, premium digital solutions tailored for the next generation of industry leaders.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-6 justify-center">
+              <button className="bg-white text-slate-950 px-12 py-5 rounded-full font-black text-xl hover:scale-105 transition-all shadow-2xl">Start Building Now</button>
+              <button className="bg-white/5 backdrop-blur-md border border-white/10 px-12 py-5 rounded-full font-black text-xl hover:bg-white/10 transition-all">Watch 2025 Demo</button>
+            </div>
+          </div>
+        </section>
+
+        <section className="max-w-7xl mx-auto px-6 py-32 border-t border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((f, i) => <FeatureCard key={i} {...f} />)}
+          </div>
+        </section>
+
+        <section className="bg-slate-900/50 py-32 border-y border-white/5">
+           <div className="max-w-4xl mx-auto px-6 text-center">
+              <h2 className="text-4xl font-bold text-white mb-6">Built for Scaling</h2>
+              <p className="text-slate-400 mb-12">Our multi-region architecture ensures your application is always close to your users.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                 <div><div className="text-3xl font-bold text-indigo-400">99.9%</div><div className="text-xs uppercase tracking-widest mt-2">Uptime SLA</div></div>
+                 <div><div className="text-3xl font-bold text-indigo-400">200+</div><div className="text-xs uppercase tracking-widest mt-2">Edge Locations</div></div>
+                 <div><div className="text-3xl font-bold text-indigo-400">5ms</div><div className="text-xs uppercase tracking-widest mt-2">Latency</div></div>
+                 <div><div className="text-3xl font-bold text-indigo-400">10k+</div><div className="text-xs uppercase tracking-widest mt-2">Enterprise Clients</div></div>
+              </div>
+           </div>
+        </section>
+      </main>
+
+      <footer className="bg-slate-950 px-6 py-24 border-t border-white/10">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-16 text-sm">
+           <div className="col-span-2 md:col-span-1">
+              <span className="text-2xl font-black text-white mb-8 block">PREMIUM</span>
+              <p className="text-slate-500 leading-relaxed mb-8">Building the high-fidelity infrastructure of our digital future. Tailored for excellence.</p>
+           </div>
+           <div>
+              <h4 className="text-white font-bold mb-6">Product</h4>
+              <ul className="space-y-4 text-slate-500"><li>Changelog</li><li>Documentation</li><li>Real-time Stats</li><li>Security</li></ul>
+           </div>
+           <div>
+              <h4 className="text-white font-bold mb-6">Company</h4>
+              <ul className="space-y-4 text-slate-500"><li>About Us</li><li>Careers</li><li>Press</li><li>Privacy</li></ul>
+           </div>
+           <div>
+              <h4 className="text-white font-bold mb-6">Social</h4>
+              <ul className="space-y-4 text-slate-500"><li>Twitter</li><li>LinkedIn</li><li>GitHub</li><li>Discord</li></ul>
+           </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+</boltAction>
 <boltAction type="shell">npm install</boltAction>
 <boltAction type="start">npm run dev</boltAction>
 </boltArtifact>

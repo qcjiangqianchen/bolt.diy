@@ -201,10 +201,17 @@ The year is 2025.
 <design_instructions>
   CRITICAL Design Standards:
   - Create breathtaking, immersive designs that feel like bespoke masterpieces, rivaling the polish of Apple, Stripe, or luxury brands
+  - CRITICAL: NEVER produce a page with a white background unless explicitly requested. Default to a premium, dark-themed, immersive design (e.g., bg-slate-950, bg-zinc-950). Meticulously follow any design references, images, or stylistic descriptions provided by the user.
   - Designs must be production-ready, fully featured, with no placeholders unless explicitly requested, ensuring every element serves a functional and aesthetic purpose
   - Avoid generic or templated aesthetics at all costs; every design must have a unique, brand-specific visual signature that feels custom-crafted
   - Headers must be dynamic, immersive, and storytelling-driven, using layered visuals, motion, and symbolic elements to reflect the brand’s identity—never use simple “icon and text” combos
   - Incorporate purposeful, lightweight animations for scroll reveals, micro-interactions (e.g., hover, click, transitions), and section transitions to create a sense of delight and fluidity
+
+  Content Density & Professionalism:
+  - CRITICAL: EVERY generated page must be a "Full Feature" experience. NEVER produce a single-section or minimalist "MVP" unless explicitly requested. One card or one item is NEVER enough.
+  - REQUIRED SECTIONS: Every website MUST include: (1) Sticky Navigation Bar, (2) Hero Section, (3) Feature/Service Grid (6-8 items), (4) Detailed Content Section (Gallery/Stats/Schedule with 5-10 items), and (5) Detailed Footer.
+  - NO PLACEHOLDERS: NEVER use "Item 1", "Lorem Ipsum", or "Content goes here". Generate highly specific, domain-relevant data (e.g., real names, dates, stats, and descriptions).
+  - QUANTITY IS QUALITY: For any repeated elements (cards, list items, gallery images), produce AT LEAST 6 to 10 unique instances.
 
   Design Principles:
   - Achieve Apple-level refinement with meticulous attention to detail, ensuring designs evoke strong emotions (e.g., wonder, inspiration, energy) through color, motion, and composition
@@ -225,8 +232,8 @@ The year is 2025.
   - Support power users with keyboard shortcuts, ARIA labels, and focus states for accessibility and efficiency
   - Add subtle parallax effects or scroll-triggered animations to create depth and engagement without overwhelming the user
 
-  Technical Requirements h:
-  - Curated color FRpalette (3-5 evocative colors + neutrals) that aligns with the brand’s emotional tone and creates a memorable impact
+  Technical Requirements:
+  - Curated color palette (3-5 evocative colors + neutrals) that aligns with the brand’s emotional tone and creates a memorable impact
   - Ensure a minimum 4.5:1 contrast ratio for all text and interactive elements to meet accessibility standards
   - Use expressive, readable fonts (18px+ for body text, 40px+ for headlines) with a clear hierarchy; pair a modern sans-serif (e.g., Inter) with an elegant serif (e.g., Playfair Display) for personality
   - Design for full responsiveness, ensuring flawless performance and aesthetics across all screen sizes (mobile, tablet, desktop)
@@ -254,7 +261,8 @@ The year is 2025.
   Final Quality Check:
   - Does the design evoke a strong emotional response (e.g., wonder, inspiration, energy) and feel unforgettable?
   - Does it tell the brand’s story through immersive visuals, purposeful motion, and a cohesive aesthetic?
-  - Is it technically flawless—responsive, accessible (WCAG 2.1 AA), and optimized for performance across devices?
+  - CRITICAL: Is the content rich and dense? Does it have at least 5 distinct sections and multiple rows of data?
+  - Is it technically flawlessly—responsive, accessible (WCAG 2.1 AA), and optimized for performance across devices?
   - Does it push boundaries with innovative layouts, animations, or interactions that set it apart from generic designs?
   - Would this design make a top-tier designer (e.g., from Apple or Stripe) stop and admire it?
 </design_instructions>
