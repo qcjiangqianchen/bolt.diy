@@ -120,9 +120,13 @@ export const AnalyticsPanel = memo(() => {
             onClick={() => {
               const base = (import.meta.env.VITE_PUBLIC_BOLT_URL || window.location.origin).trim();
               const url = `${base}/api/stats?app=ping-test&path=manual-ping&sid=test&ngrok-skip-browser-warning=1&t=${Date.now()}`;
-              const img = new Image();
-              img.src = url;
-              alert('Ping Request Sent! Check your Bolt terminal for "Beacon received: app=ping-test".');
+              fetch(url, { mode: 'no-cors', keepalive: true })
+                .then(() =>
+                  alert(
+                    'Ping Request Sent! Check your Bolt terminal for "[Analytics] Beacon received: app=ping-test".',
+                  ),
+                )
+                .catch((err) => alert('Ping Failed: ' + err.message));
             }}
             className="mt-2 px-2 py-1 bg-purple-500 text-white rounded text-[8px]"
           >

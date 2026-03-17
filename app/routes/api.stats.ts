@@ -28,7 +28,7 @@ interface PageViewEvent {
 const ANALYTICS_CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, ngrok-skip-browser-warning, Accept, X-Requested-With',
+  'Access-Control-Allow-Headers': '*',
   'Access-Control-Max-Age': '86400',
   'Cross-Origin-Resource-Policy': 'cross-origin',
   'Timing-Allow-Origin': '*',
@@ -78,11 +78,11 @@ async function appendEvent(appName: string, event: PageViewEvent): Promise<void>
     await mkdir(dir, { recursive: true });
     await writeFile(filePath, JSON.stringify(events), 'utf-8');
 
-    // Clear memory store so next read forces a fresh disk capture
-    inMemoryStore.delete(appName);
+    // Keep events in memory for fast retrieval, no need to delete
     console.log(`[Analytics] Persisted event for ${appName} to ${filePath}`);
   } catch {
     // Disk persistence not available (edge runtime) — memory-only is fine
+    console.log(`[Analytics] Disk persistence failed for ${appName}, keeping in memory`);
   }
 }
 
@@ -196,9 +196,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           headers: {
             'Content-Type': 'image/gif',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Access-Control-Allow-Origin': '*',
-            'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Timing-Allow-Origin': '*',
+            ...corsHeaders,
           },
         },
       );
@@ -241,9 +239,21 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const url = new URL(request.url);
-  const appName = url.searchParams.get('app');
-  const pagePath = url.searchParams.get('path') || '/';
-  const sid = url.searchParams.get('sid') || 'unknown';
+  let appName = url.searchParams.get('app');
+  let pagePath = url.searchParams.get('path') || '/';
+  let sid = url.searchParams.get('sid');
+
+  // Fallback: Check JSON body if LLM hallucinations sent a JSON POST
+  if (!appName && request.headers.get('Content-Type')?.includes('application/json')) {
+    try {
+      const body = (await request.clone().json()) as any;
+      appName = body.app || body.appName || body.app_name;
+      pagePath = body.path || body.pagePath || body.page_path || '/';
+      sid = body.sid || body.sessionId || body.session_id;
+    } catch {
+      // ignore
+    }
+  }
 
   console.log(`[Analytics] Data received: app=${appName}, path=${pagePath}`);
 
@@ -258,7 +268,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const event: PageViewEvent = {
       ts: new Date().toISOString(),
       path: pagePath,
-      sid,
+      sid: sid || 'unknown',
     };
     await appendEvent(appName, event);
 

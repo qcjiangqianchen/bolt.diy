@@ -162,34 +162,60 @@ export async function streamText(props: {
 
   // Add forced artifact usage reminder at the end of system prompt for build mode
   const isFirstMessage = processedMessages.length <= 1;
+  const isEarlyConversation = processedMessages.length <= 3;
   const hasExistingProject = contextFiles && Object.keys(contextFiles).length > 0;
 
-  const clarificationBlock =
+  // Block 1: Only shown on the very first message — instructs LLM to offer 3 templates
+  const templateOfferBlock =
     isFirstMessage && !hasExistingProject
       ? `
 FIRST MESSAGE BEHAVIOR:
 When the user sends their FIRST message describing a new project:
-1. Briefly acknowledge their request.
-2. If they didn't provide a specific design style, offer them 3 visual templates using the <boltTemplateSelector> tag.
-Example:
-"Let's build your new site! Please select a template to start with:
+1. Briefly acknowledge their request (1-2 sentences max).
+2. You MUST offer them EXACTLY 3 distinct visual design templates using the <boltTemplateSelector> tag. ALWAYS provide exactly 3 <template> tags — no more, no fewer.
+   - Each template must have a unique id, a descriptive title, an image URL (use Unsplash with ?w=800&q=80), and a short description.
+   - The templates should be relevant to the user's request (e.g., for a tennis site, offer tennis/sports-themed templates).
+3. After outputting the <boltTemplateSelector>, tell the user to select a template. Then STOP. Do NOT generate any code or <boltArtifact> tags in this first response.
+
+Example of a correct first response:
+"Great idea! Let's get started. Please select a template to start with:
 <boltTemplateSelector>
   <template id="SaaS-dark" title="Sleek Dark Mode" image="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80" description="A modern, dark-themed template."/>
-</boltTemplateSelector>"
+  <template id="E-commerce-vibrant" title="Vibrant Shopping" image="https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80" description="A bright, energetic template for online stores."/>
+  <template id="Blog-minimal" title="Clean Reader" image="https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=800&q=80" description="A minimalist blog template focused on typography."/>
+</boltTemplateSelector>
 
-3. Wait for the user to reply with their template choice.
+Please choose one of the templates to proceed."
 
 CRITICAL RULES FOR FIRST MESSAGE:
-- You should try to wait for the user to reply and NOT generate code.
-- HOWEVER, IF you do generate code anyway, YOU MUST wrap all code inside a <boltArtifact> tag.
-- NEVER output raw code in the chat. Always use <boltArtifact>.`
+- You MUST provide EXACTLY 3 <template> elements inside <boltTemplateSelector>. This is non-negotiable.
+- Do NOT generate any code or <boltArtifact> in your first response. Only output the template selector and a brief message.
+- NEVER output raw code in the chat. If you absolutely must show code, use <boltArtifact>.`
+      : '';
+
+  // Block 2: Shown during the first few messages — instructs LLM to ask questions after template selection
+  const templateSelectionBlock =
+    isEarlyConversation && !hasExistingProject
+      ? `
+TEMPLATE SELECTION RESPONSE:
+When the user selects a template (you'll see a message like "I have selected the ... template"), you MUST follow this procedure BEFORE generating any code:
+1. Acknowledge their template choice briefly (1 sentence).
+2. Ask the user 3-5 targeted follow-up questions to gather the information you need to build a great application. Questions should cover:
+   - How many pages/sections the site should have, and what each page is about
+   - What specific content or features they want on each page (e.g., image galleries, contact forms, data tables)
+   - Any branding/style preferences beyond the template (colors, fonts, logos)
+   - Any data or functionality requirements (e.g., "list the latest 3 tennis tournaments")
+3. CRITICAL: Do NOT generate any code or <boltArtifact> at this stage. Your response should ONLY contain the acknowledgment and questions. Wait for the user to answer your questions first.
+4. Only after the user has answered your questions should you proceed to generate the full application code with <boltArtifact>.`
       : '';
 
   const finalSystemMessage =
     chatMode === 'build'
       ? `${systemMessage}
-${clarificationBlock}
+
 RESPONSE FORMAT:
+(CRITICAL: If you are in the FIRST MESSAGE BEHAVIOR or TEMPLATE SELECTION RESPONSE phase described at the bottom of this prompt, follow those instructions instead and DISREGARD the artifact/code generation rules below until the questions are answered.)
+
 You MUST be conversational and informative. Structure your response like this:
 1. First, briefly explain what you're about to do (1-3 sentences). For example: "I'll create a simple tennis webpage with a hero section and player stats." or "Let me update the index.html to add a Roger Federer section below the existing content."
 2. Then include the <boltArtifact> block with all necessary file actions.
@@ -261,6 +287,9 @@ I'll create a React app for you. Let me set up the project structure and install
 Your React app is now running! The dev server is started and you should see it in the preview. You can customize the components in the src/ folder.
 
 NEVER use echo commands or npm start without a package.json. ALWAYS use <boltAction type="start"> (not type="shell") for starting servers. ALWAYS run npm install before starting if there are dependencies.
+
+${templateOfferBlock}
+${templateSelectionBlock}
 `
       : systemMessage;
 

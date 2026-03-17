@@ -288,7 +288,7 @@ export class BoltShell {
 
       const text = value || '';
       fullOutput += text;
-      buffer += text; // <-- Accumulate in buffer
+      buffer += text;
 
       // Extract Expo URL from buffer and set store
       const expoUrlMatch = buffer.match(expoUrlRegex);
@@ -304,15 +304,25 @@ export class BoltShell {
         buffer = buffer.slice(buffer.indexOf(expoUrlMatch[1]) + expoUrlMatch[1].length);
       }
 
-      // Check if command completion signal with exit code
-      const [, osc, , , code] = text.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/) || [];
+      /*
+       * Check if command completion signal with exit code
+       * CRITICAL: We MUST match against the buffer because the signal could be split across chunks
+       */
+      const oscMatch = buffer.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/);
 
-      if (osc === 'exit') {
-        exitCode = parseInt(code, 10);
-      }
+      if (oscMatch) {
+        const [, osc, , , code] = oscMatch;
 
-      if (osc === waitCode) {
-        break;
+        if (osc === 'exit') {
+          exitCode = parseInt(code, 10);
+        }
+
+        // Clear buffer up to the end of the signal
+        buffer = buffer.slice(oscMatch.index! + oscMatch[0].length);
+
+        if (osc === waitCode) {
+          break;
+        }
       }
     }
 

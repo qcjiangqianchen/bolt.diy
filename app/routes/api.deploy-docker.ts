@@ -369,8 +369,14 @@ async function handleFlyDeploy(
           try{
             var s=window.sessionStorage, sid;
             try { sid = s._boltSid || (s._boltSid = Math.random().toString(36).slice(2)); } catch(e) { sid = 'anon-' + Math.random().toString(36).slice(2); }
-            var img=new Image();
-            img.src=_boltUrl+'/api/stats?app='+encodeURIComponent(_boltApp)+'&path='+encodeURIComponent(p||'/')+'&sid='+encodeURIComponent(sid)+'&ngrok-skip-browser-warning=1&t='+Date.now();
+            var url = _boltUrl + '/api/stats?app=' + encodeURIComponent(_boltApp) + '&path=' + encodeURIComponent(p || '/') + '&sid=' + encodeURIComponent(sid) + '&ngrok-skip-browser-warning=1&t=' + Date.now();
+            if (typeof navigator.sendBeacon === 'function') {
+              navigator.sendBeacon(url);
+            } else if (typeof fetch === 'function') {
+              fetch(url, { mode: 'no-cors', keepalive: true }).catch(function(){});
+            } else {
+              var img = new Image(); img.src = url;
+            }
           }catch(e){}
         }
         if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){_boltTrack(location.pathname);});}
