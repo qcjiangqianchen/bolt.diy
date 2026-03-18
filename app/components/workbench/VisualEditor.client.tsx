@@ -119,25 +119,26 @@ function extractTailwindConfigObject(content: string): string | null {
     .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1') // Strip comments
     .trim();
 
-  // 1. Look for structured object between { and }
-  const startIdx = cleanContent.indexOf('{');
+  // Find where the actual export starts so we don't accidentally match imports (like `import { Config } ...`)
+  let exportIdx = cleanContent.indexOf('export default');
+
+  if (exportIdx === -1) {
+    exportIdx = cleanContent.indexOf('module.exports');
+  }
+
+  if (exportIdx === -1) {
+    exportIdx = 0; // Fallback to start if not found
+  }
+
+  // Look for structured object between the first { after export, and the very last }
+  const startIdx = cleanContent.indexOf('{', exportIdx);
   const endIdx = cleanContent.lastIndexOf('}');
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     return cleanContent.slice(startIdx, endIdx + 1);
   }
 
-  // 2. Fallback for simple exports
-  let objectStr = cleanContent
-    .replace(/export\s+default\s+/, '')
-    .replace(/module\.exports\s*=\s*/, '')
-    .trim();
-
-  if (objectStr.endsWith(';')) {
-    objectStr = objectStr.slice(0, -1);
-  }
-
-  return objectStr || null;
+  return null;
 }
 
 /**
@@ -193,7 +194,15 @@ async function injectTailwindToDoc(doc: Document, wc: any, hasTailwind: boolean)
       doc.head.appendChild(configScript);
     }
 
-    configScript.textContent = `window.tailwind = window.tailwind || {}; window.tailwind.config = ${twConfig || baselineConfig};`;
+    configScript.textContent = `
+      window.tailwind = window.tailwind || {};
+      try {
+        window.tailwind.config = ${twConfig || baselineConfig};
+      } catch (e) {
+        console.warn('[VisualEditor] Failed to parse Tailwind config, falling back to baseline', e);
+        window.tailwind.config = ${baselineConfig};
+      }
+    `;
 
     // 3. Inject Tailwind Library via textContent (most resilient bypass for COEP/CORS)
     const twScript = await getTailwindScript();
@@ -204,6 +213,14 @@ async function injectTailwindToDoc(doc: Document, wc: any, hasTailwind: boolean)
       script.textContent = twScript;
       doc.head.appendChild(script);
       console.info('[VisualEditor] Tailwind library injected via textContent.');
+    } else if (!twScript && !doc.querySelector('script#tailwind-cdn-fallback')) {
+      // 3b. If fetch fails, we MUST fallback to a direct src tag (with crossOrigin!)
+      const script = doc.createElement('script');
+      script.id = 'tailwind-cdn-fallback';
+      script.src = 'https://cdn.tailwindcss.com';
+      script.crossOrigin = 'anonymous'; // Vital for COEP isolated environments
+      doc.head.appendChild(script);
+      console.info('[VisualEditor] Tailwind library injected via fallback src script.');
     }
 
     // 4. Robust Rendering Loop
