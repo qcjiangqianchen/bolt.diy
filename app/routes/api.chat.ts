@@ -272,36 +272,41 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (chunk, controller) => {
-          if (!lastChunk) {
-            lastChunk = ' ';
-          }
-
-          if (typeof chunk === 'string') {
-            if (chunk.startsWith('g') && !lastChunk.startsWith('g')) {
-              controller.enqueue(encoder.encode(`0: "<div class=\\"__boltThought__\\">"\n`));
+          try {
+            if (!lastChunk) {
+              lastChunk = ' ';
             }
 
-            if (lastChunk.startsWith('g') && !chunk.startsWith('g')) {
-              controller.enqueue(encoder.encode(`0: "</div>\\n"\n`));
-            }
-          }
+            if (typeof chunk === 'string') {
+              if (chunk.startsWith('g') && !lastChunk.startsWith('g')) {
+                controller.enqueue(encoder.encode(`0: "<div class=\\"__boltThought__\\">"\n`));
+              }
 
-          lastChunk = chunk;
-
-          let transformedChunk = chunk;
-
-          if (typeof chunk === 'string' && chunk.startsWith('g')) {
-            let content = chunk.split(':').slice(1).join(':');
-
-            if (content.endsWith('\n')) {
-              content = content.slice(0, content.length - 1);
+              if (lastChunk.startsWith('g') && !chunk.startsWith('g')) {
+                controller.enqueue(encoder.encode(`0: "</div>\\n"\n`));
+              }
             }
 
-            transformedChunk = `0:${content}\n`;
-          }
+            lastChunk = chunk;
 
-          const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
-          controller.enqueue(encoder.encode(str));
+            let transformedChunk = chunk;
+
+            if (typeof chunk === 'string' && chunk.startsWith('g')) {
+              let content = chunk.split(':').slice(1).join(':');
+
+              if (content.endsWith('\n')) {
+                content = content.slice(0, content.length - 1);
+              }
+
+              transformedChunk = `0:${content}\n`;
+            }
+
+            const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
+            controller.enqueue(encoder.encode(str));
+          } catch (e) {
+            // Guard against "Controller is already closed" errors during stream termination
+            console.warn('[api.chat] Transform stream error (likely closed):', e);
+          }
         },
       }),
     );

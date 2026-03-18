@@ -25,6 +25,247 @@ import { workbenchStore } from '~/lib/stores/workbench';
 // Our bolt.diy overrides for GrapeJS styling
 import '~/lib/styles/grapesjs-overrides.css';
 
+// Global cache for the Tailwind script to avoid repeated network requests
+let tailwindScriptCache: string | null = null;
+
+async function getTailwindScript() {
+  if (tailwindScriptCache) {
+    return tailwindScriptCache;
+  }
+
+  try {
+    // We fetch on the main thread to bypass COEP/CORS issues in the iframe
+    const response = await fetch('https://cdn.tailwindcss.com');
+
+    if (response.ok) {
+      tailwindScriptCache = await response.text();
+      return tailwindScriptCache;
+    }
+
+    return null;
+  } catch {
+    // Log as info, not error, to keep console clean if fetch fails normally
+    console.info('[VisualEditor] Fetch for Tailwind CDN failed (CORS/Network), using fallback script tag in iframe.');
+    return null;
+  }
+}
+
+async function getTailwindConfig(wc: any) {
+  const configs = ['tailwind.config.js', 'tailwind.config.ts', 'tailwind.config.cjs', 'tailwind.config.mjs'];
+
+  for (const configPath of configs) {
+    try {
+      const content = await wc.fs.readFile(configPath, 'utf-8');
+      return extractTailwindConfigObject(content);
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Robustly detects if the project uses Tailwind CSS.
+ */
+async function detectTailwind(wc: any, html: string, linkedCss: string): Promise<boolean> {
+  const hasHtmlTailwind =
+    /tailwindcss\.com|cdn\.tailwindcss\.com/.test(html) ||
+    html.includes('@tailwind') ||
+    html.includes('tailwind.css') ||
+    html.includes('tailwind.min.css');
+
+  if (hasHtmlTailwind) {
+    return true;
+  }
+
+  if (linkedCss.includes('@tailwind')) {
+    return true;
+  }
+
+  try {
+    const files = await wc.fs.readdir('.');
+
+    for (const f of files) {
+      const name = typeof f === 'string' ? f : (f as any).name;
+
+      if (name && (name.startsWith('tailwind.config.') || name === 'tailwind.config')) {
+        return true;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const pkg = await wc.fs.readFile('package.json', 'utf-8');
+
+    if (pkg && (pkg.includes('"tailwindcss"') || pkg.includes('"@tailwindcss/'))) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
+/**
+ * Enhanced Tailwind Config Extraction
+ * Extracts the object literal from common tailwind.config.* patterns.
+ */
+function extractTailwindConfigObject(content: string): string | null {
+  const cleanContent = content
+    .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1') // Strip comments
+    .trim();
+
+  // 1. Look for structured object between { and }
+  const startIdx = cleanContent.indexOf('{');
+  const endIdx = cleanContent.lastIndexOf('}');
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return cleanContent.slice(startIdx, endIdx + 1);
+  }
+
+  // 2. Fallback for simple exports
+  let objectStr = cleanContent
+    .replace(/export\s+default\s+/, '')
+    .replace(/module\.exports\s*=\s*/, '')
+    .trim();
+
+  if (objectStr.endsWith(';')) {
+    objectStr = objectStr.slice(0, -1);
+  }
+
+  return objectStr || null;
+}
+
+/**
+ * Scans common locations for index.html and returns the content and path.
+ */
+async function findAndReadIndexHtml(wc: any): Promise<{ content: string; path: string }> {
+  const candidates = ['index.html', 'public/index.html', 'dist/index.html', 'src/index.html'];
+
+  for (const candidate of candidates) {
+    try {
+      const content = await wc.fs.readFile(candidate, 'utf-8');
+
+      if (content && content.trim().length > 0) {
+        return { content, path: candidate };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return { content: '', path: '' };
+}
+
+/**
+ * Robustly injects Tailwind CDN and configuration into a GrapesJS canvas document.
+ */
+async function injectTailwindToDoc(doc: Document, wc: any, hasTailwind: boolean) {
+  try {
+    if (!hasTailwind) {
+      return;
+    }
+
+    const twConfig = await getTailwindConfig(wc);
+    const win = doc.defaultView as any;
+
+    if (!win) {
+      return;
+    }
+
+    // 1. Prepare Configuration (including baseline defaults)
+    const baselineConfig = `{ 
+      darkMode: 'class',
+      content: { relative: true, files: ["*"] },
+      theme: { extend: {} }
+    }`;
+
+    // 2. Inject Configuration Script
+    let configScript = doc.querySelector('script#tailwind-config-bypass');
+
+    if (!configScript) {
+      configScript = doc.createElement('script');
+      configScript.id = 'tailwind-config-bypass';
+      doc.head.appendChild(configScript);
+    }
+
+    configScript.textContent = `window.tailwind = window.tailwind || {}; window.tailwind.config = ${twConfig || baselineConfig};`;
+
+    // 3. Inject Tailwind Library via textContent (most resilient bypass for COEP/CORS)
+    const twScript = await getTailwindScript();
+
+    if (twScript && !doc.querySelector('script#tailwind-cdn-bypass')) {
+      const script = doc.createElement('script');
+      script.id = 'tailwind-cdn-bypass';
+      script.textContent = twScript;
+      doc.head.appendChild(script);
+      console.info('[VisualEditor] Tailwind library injected via textContent.');
+    }
+
+    // 4. Robust Rendering Loop
+    let attempts = 0;
+    const MAX_ATTEMPTS = 100; // Increased timeout for slower environments
+    const interval = setInterval(() => {
+      const tw = win.tailwind;
+
+      if (tw && typeof tw.render === 'function') {
+        tw.render();
+        clearInterval(interval);
+        console.info('[VisualEditor] Tailwind rendered successfully.');
+      } else if (attempts > MAX_ATTEMPTS) {
+        clearInterval(interval);
+        console.warn('[VisualEditor] Tailwind render timed out.');
+      }
+
+      attempts++;
+    }, 150);
+
+    // 5. MutationObserver for visual updates (essential for dynamic GJS edits)
+    if (!win._tailwindObserver) {
+      const observer = new MutationObserver(() => {
+        if (win.tailwind?.render) {
+          win.tailwind.render();
+        }
+      });
+      observer.observe(doc.body || doc.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+      });
+      win._tailwindObserver = observer;
+    }
+  } catch (e) {
+    console.warn('[VisualEditor] Tailwind injection failed:', e);
+  }
+}
+
+/**
+ * Reads common CSS files in Vite/React projects that might not be explicitly
+ * linked in index.html, but are imported via JS.
+ */
+async function readCommonCss(wc: any): Promise<string> {
+  const commonCssFiles = ['src/index.css', 'src/main.css', 'src/App.css', 'styles/globals.css', 'src/styles.css'];
+  let content = '';
+
+  for (const path of commonCssFiles) {
+    try {
+      const fileContent = await wc.fs.readFile(path, 'utf-8');
+
+      if (fileContent) {
+        content += `\n/* ── Derived from ${path} ── */\n${fileContent}\n`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return content;
+}
+
 /*
  * ── Block definitions ─────────────────────────────────────────────────────
  * Using inline CSS throughout so blocks work regardless of whether the
@@ -477,19 +718,47 @@ const BLOCKS = [
 // ── HTML parse helpers ────────────────────────────────────────────────────
 
 /**
- * Extracts the <body> inner HTML and all <style> block contents from a full
- * HTML document string. Falls back gracefully for partial/missing documents.
+ * Extracts the <body> inner HTML, all <style> block contents, and all relevant
+ * <script> tags (like Tailwind CDN) from a full HTML document string.
  */
-function parseHtmlDocument(html: string): { bodyHtml: string; cssContent: string } {
+function parseHtmlDocument(html: string): {
+  bodyHtml: string;
+  cssContent: string;
+  scriptUrls: string[];
+  bodyClass: string;
+} {
   // Extract all <style> content
   const styleMatches = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)];
   const cssContent = styleMatches.map((m) => m[1]).join('\n');
 
-  // Extract <body> inner HTML
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  const bodyHtml = bodyMatch ? bodyMatch[1].trim() : html;
+  // Extract relevant <script src="..."> URLs
+  const scriptMatches = [...html.matchAll(/<script[^>]+src=["']([^"']+)["'][^>]*>[\s\S]*?<\/script>/gi)];
+  const scriptUrls = scriptMatches.map((m) => m[1]);
 
-  return { bodyHtml, cssContent };
+  const filteredScriptUrls = scriptUrls.filter(
+    (url) => !url.includes('tailwindcss.com') && !url.includes('cdn.tailwindcss.com'),
+  );
+
+  // Extract <body> class and inner HTML
+  const bodyMatch = html.match(/<body([^>]*)>([\s\S]*)<\/body>/i);
+  let bodyHtml = '';
+  let bodyClass = '';
+
+  if (bodyMatch) {
+    const bodyAttr = bodyMatch[1] || '';
+    bodyHtml = bodyMatch[2].trim();
+
+    const classMatch = bodyAttr.match(/class\s*=\s*["']([^"']+)["']/i);
+    bodyClass = classMatch ? classMatch[1] : '';
+  } else {
+    // If no body tag, use the whole HTML but strip <head>
+    bodyHtml = html
+      .replace(/<head>[\s\S]*?<\/head>/gi, '')
+      .replace(/<html[^>]*>|<\/html>|<body[^>]*>|<\/body>/gi, '')
+      .trim();
+  }
+
+  return { bodyHtml, cssContent, scriptUrls: filteredScriptUrls, bodyClass };
 }
 
 /**
@@ -516,7 +785,11 @@ function buildHtmlDocument(originalHtml: string, newBodyHtml: string, newCss: st
 
   // Replace <body> content
   if (/<body[^>]*>/i.test(result)) {
+    // Preserve the body attributes if any
     result = result.replace(/<body([^>]*)>[\s\S]*?<\/body>/i, `<body$1>\n${newBodyHtml}\n</body>`);
+  } else {
+    // Fallback if no body tag found, though unlikely for valid HTML
+    result = `${result}\n<body>\n${newBodyHtml}\n</body>`;
   }
 
   return result;
@@ -532,36 +805,56 @@ export const VisualEditor = memo(() => {
   const [, setLoadStatus] = useState<'loading' | 'loaded-from-file' | 'blank'>('loading');
   const updateSignal = useStore(visualEditorUpdateSignalAtom);
   const isSyncingFromExternalRef = useRef(false);
+  const hasTailwindRef = useRef(false);
 
-  // ── Re-read from WebContainer when LLM writes HTML/CSS ──────────────────
   useEffect(() => {
-    if (!editorRef.current || !updateSignal) {
+    if (!editorRef.current) {
       return;
     }
 
     const editor = editorRef.current;
 
-    webcontainer.then(async (wc) => {
-      if (!indexHtmlPathRef.current) {
-        return;
-      }
+    (async () => {
+      console.info('[VisualEditor] Sync signal:', updateSignal);
 
       try {
-        const content = await wc.fs.readFile(indexHtmlPathRef.current, 'utf-8');
+        const wc = await webcontainer;
 
-        if (!content) {
+        let indexHtmlContent = '';
+
+        if (indexHtmlPathRef.current) {
+          try {
+            indexHtmlContent = await wc.fs.readFile(indexHtmlPathRef.current, 'utf-8');
+          } catch {
+            // Path might be invalid/moved
+          }
+        }
+
+        if (!indexHtmlContent) {
+          const { content, path } = await findAndReadIndexHtml(wc);
+          indexHtmlContent = content;
+          indexHtmlPathRef.current = path;
+        }
+
+        if (!indexHtmlContent) {
+          console.warn('[VisualEditor] index.html missing or empty.');
           return;
         }
 
-        const { bodyHtml, cssContent: inlineCss } = parseHtmlDocument(content);
+        const {
+          bodyHtml,
+          cssContent: inlineCss,
+          scriptUrls: externalScripts,
+          bodyClass,
+        } = parseHtmlDocument(indexHtmlContent);
 
-        // ── Read linked CSS files (same logic as initial mount) ──
+        // ── Read linked CSS files ──
         let linkedCss = '';
         const externalStyleUrls: string[] = [];
 
         const linkMatches = [
-          ...content.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["']/gi),
-          ...content.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet["']/gi),
+          ...indexHtmlContent.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["']/gi),
+          ...indexHtmlContent.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet["']/gi),
         ];
         const hrefs = [...new Set(linkMatches.map((m) => m[1]))];
 
@@ -584,7 +877,13 @@ export const VisualEditor = memo(() => {
           }
         }
 
-        const allCss = [inlineCss, linkedCss].filter(Boolean).join('\n');
+        // Deep Scan: Also read non-linked common CSS files (Vite-style)
+        const commonCss = await readCommonCss(wc);
+
+        const hasTailwind = await detectTailwind(wc, indexHtmlContent, linkedCss + commonCss);
+        hasTailwindRef.current = hasTailwind;
+
+        const allCss = [inlineCss, linkedCss, commonCss].filter(Boolean).join('\n');
 
         // Guard flag: prevent syncExport from writing back while we update from LLM
         isSyncingFromExternalRef.current = true;
@@ -597,23 +896,79 @@ export const VisualEditor = memo(() => {
           editor.setStyle(allCss);
         }
 
-        // Inject external stylesheet URLs into the GrapeJS canvas <head>
-        if (externalStyleUrls.length > 0) {
-          const canvasDoc = editor.Canvas.getDocument();
+        // Wait for GrapesJS to finish setting components
+        setTimeout(async () => {
+          let canvasDoc: Document | null = null;
+
+          try {
+            canvasDoc = editor.Canvas.getDocument();
+
+            if (!canvasDoc || !canvasDoc.head) {
+              canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
+            }
+          } catch (e) {
+            console.warn('[VisualEditor] Direct canvas access failed, falling back to frame element', e);
+            canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
+          }
 
           if (canvasDoc) {
-            for (const url of externalStyleUrls) {
-              if (!canvasDoc.querySelector(`link[href="${url}"]`)) {
-                const link = canvasDoc.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = url;
-                canvasDoc.head.appendChild(link);
+            console.info('[VisualEditor] Syncing styling to canvas...', { hasTailwind, bodyClass });
+            await injectTailwindToDoc(canvasDoc, wc, hasTailwind);
+
+            // Sync body class and background
+            if (bodyClass) {
+              try {
+                canvasDoc.body.className = bodyClass;
+                editor.getWrapper().setAttributes({ class: bodyClass });
+                editor.getWrapper().addStyle({ 'background-color': 'inherit' });
+
+                if (
+                  bodyClass.includes('slate-950') ||
+                  bodyClass.includes('bg-[#0a0a0a]') ||
+                  bodyClass.includes('bg-neutral-950') ||
+                  bodyClass.includes('bg-black')
+                ) {
+                  editor.getWrapper().addStyle({ 'background-color': '#020617' });
+                }
+              } catch (e) {
+                console.warn('[VisualEditor] Error syncing body attributes', e);
+              }
+            }
+
+            if (externalStyleUrls.length > 0) {
+              for (const url of externalStyleUrls) {
+                try {
+                  if (!canvasDoc.querySelector(`link[href="${url}"]`)) {
+                    const link = canvasDoc.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = url;
+                    canvasDoc.head.appendChild(link);
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }
+
+            // Inject non-Tailwind scripts
+            if (externalScripts.length > 0) {
+              for (const url of externalScripts) {
+                try {
+                  if (!canvasDoc.querySelector(`script[src="${url}"]`)) {
+                    const script = canvasDoc.createElement('script');
+                    script.src = url;
+                    script.crossOrigin = 'anonymous';
+                    canvasDoc.head.appendChild(script);
+                  }
+                } catch {
+                  // ignore
+                }
               }
             }
           }
-        }
+        }, 300);
 
-        originalHtmlRef.current = content;
+        originalHtmlRef.current = indexHtmlContent;
 
         // Release guard after GrapeJS finishes its internal update cycle
         setTimeout(() => {
@@ -623,7 +978,7 @@ export const VisualEditor = memo(() => {
         isSyncingFromExternalRef.current = false;
         console.warn('[VisualEditor] Failed to sync LLM changes into canvas:', err);
       }
-    });
+    })();
   }, [updateSignal]);
 
   useEffect(() => {
@@ -655,43 +1010,36 @@ export const VisualEditor = memo(() => {
       let existingHtml = '';
       let htmlFilePath = '';
 
-      const candidates = ['index.html', 'public/index.html', 'dist/index.html', 'src/index.html'];
-      const MAX_RETRIES = 8;
-      const RETRY_DELAY_MS = 750;
+      const MAX_RETRIES = 12; // Increased retries for slow initial generation
+      const RETRY_DELAY_MS = 800;
+
+      const wc = await webcontainer;
 
       for (let attempt = 0; attempt < MAX_RETRIES && !existingHtml; attempt++) {
         if (attempt > 0) {
-          // Wait before retrying so WC has time to mount files
           await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         }
 
-        try {
-          const wc = await webcontainer;
+        const { content, path } = await findAndReadIndexHtml(wc);
 
-          for (const candidate of candidates) {
-            try {
-              const content = await wc.fs.readFile(candidate, 'utf-8');
-
-              if (content && content.trim().length > 0) {
-                existingHtml = content;
-                htmlFilePath = candidate;
-                break;
-              }
-            } catch {
-              // File doesn't exist at this path — try next candidate
-            }
-          }
-        } catch (err) {
-          console.warn('[VisualEditor] WebContainer not ready yet, attempt', attempt + 1, err);
+        if (content) {
+          existingHtml = content;
+          htmlFilePath = path;
+          break;
         }
       }
 
       originalHtmlRef.current = existingHtml;
       indexHtmlPathRef.current = htmlFilePath;
 
-      const { bodyHtml, cssContent: inlineCss } = existingHtml
+      const {
+        bodyHtml,
+        cssContent: inlineCss,
+        scriptUrls: externalScripts,
+        bodyClass,
+      } = existingHtml
         ? parseHtmlDocument(existingHtml)
-        : { bodyHtml: '', cssContent: '' };
+        : { bodyHtml: '', cssContent: '', scriptUrls: [], bodyClass: '' };
 
       /*
        * ── 1b. Read every <link rel="stylesheet"> from WebContainer ──
@@ -721,7 +1069,6 @@ export const VisualEditor = memo(() => {
           const relativePath = href.replace(/^\//, '');
 
           try {
-            const wc = await webcontainer;
             const cssFileContent = await wc.fs.readFile(relativePath, 'utf-8');
 
             if (cssFileContent) {
@@ -733,8 +1080,14 @@ export const VisualEditor = memo(() => {
         }
       }
 
-      // Combined CSS: inline styles from <style> tags + linked .css files
-      const allCss = [inlineCss, linkedCss].filter(Boolean).join('\n');
+      // Deep Scan: Also read non-linked common CSS files (Vite-style)
+      const commonCss = await readCommonCss(wc);
+
+      // Combined CSS: inline styles + linked .css files + auto-detected common CSS
+      const allCss = [inlineCss, linkedCss, commonCss].filter(Boolean).join('\n');
+
+      const hasTailwind = await detectTailwind(wc, existingHtml || '', linkedCss + commonCss);
+      hasTailwindRef.current = hasTailwind;
 
       const containerId = 'gjs-canvas-' + Math.random().toString(36).slice(2);
       editorContainerRef.current.id = containerId;
@@ -855,6 +1208,12 @@ export const VisualEditor = memo(() => {
         // ── Canvas settings ───────────────────────────────────────
         canvas: {
           styles: ['https://cdn.jsdelivr.net/npm/modern-normalize@2/modern-normalize.min.css', ...externalStyleUrls],
+          scripts: [
+            // Removed direct Tailwind CDN link to prevent COEP/CORS conflicts; handled by injectTailwindToDoc
+            ...externalScripts.filter(
+              (url) => !url.includes('tailwindcss.com') && !url.includes('cdn.tailwindcss.com'),
+            ),
+          ],
 
           // Removes GrapeJS default body padding and matches the page's own CSS
         },
@@ -881,6 +1240,63 @@ export const VisualEditor = memo(() => {
         if (allCss) {
           editor.setStyle(allCss);
         }
+
+        // Wait for GrapesJS to stabilize
+        setTimeout(async () => {
+          let canvasDoc: Document | null = null;
+
+          try {
+            canvasDoc = editor.Canvas.getDocument();
+
+            if (!canvasDoc || !canvasDoc.head) {
+              canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
+            }
+          } catch (e) {
+            console.warn('[VisualEditor] Initial mount canvas access failed', e);
+            canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
+          }
+
+          if (canvasDoc) {
+            console.info('[VisualEditor] Initial styling sync...', { hasTailwind, bodyClass });
+            await injectTailwindToDoc(canvasDoc, wc, hasTailwind);
+
+            if (bodyClass) {
+              try {
+                editor.getWrapper().setAttributes({ class: bodyClass });
+                canvasDoc.body.className = bodyClass;
+                editor.getWrapper().addStyle({ 'background-color': 'inherit' });
+
+                if (
+                  bodyClass.includes('slate-950') ||
+                  bodyClass.includes('bg-[#0a0a0a]') ||
+                  bodyClass.includes('bg-neutral-950') ||
+                  bodyClass.includes('bg-black')
+                ) {
+                  editor.getWrapper().addStyle({ 'background-color': '#020617' });
+                }
+              } catch (e) {
+                console.warn('[VisualEditor] Error syncing initial body attributes', e);
+              }
+            }
+
+            // Also attach to future frame loads
+            editor.on('canvas:frame:load', async ({ window: frameWindow }: any) => {
+              const frameDoc = frameWindow?.document;
+
+              if (frameDoc) {
+                await injectTailwindToDoc(frameDoc, wc, hasTailwindRef.current);
+
+                if (bodyClass) {
+                  try {
+                    frameDoc.body.className = bodyClass;
+                  } catch {
+                    // ignore
+                  }
+                }
+              }
+            });
+          }
+        }, 300);
 
         visualEditorSyncedAtom.set(true);
         setLoadStatus('loaded-from-file');

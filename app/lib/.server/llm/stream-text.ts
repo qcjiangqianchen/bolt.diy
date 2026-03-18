@@ -258,7 +258,7 @@ I'll set up a premium, dark-themed static website for you.
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Premium Project</title>
+  <title>Formula 1 | Grand Prix Hub</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 font-sans text-slate-200 antialiased min-h-screen">
@@ -277,12 +277,13 @@ I'll set up a premium, dark-themed static website for you.
   <main>
     <section class="relative pt-24 pb-32 px-6 overflow-hidden text-center">
       <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#312e81,transparent)] opacity-40"></div>
+      <img src="https://images.unsplash.com/photo-1542332213-31f87348057f?auto=format&fit=crop&q=80&w=1200&h=800" alt="Racing Background" class="absolute inset-0 w-full h-full object-cover opacity-20 -z-10 animate-pulse">
       <div class="max-w-7xl mx-auto relative z-10">
         <h1 class="text-6xl md:text-8xl font-black tracking-tighter text-white mb-8 leading-[1.1]">
-          The Future of <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400">Innovation</span>
+          The Pinnacle of <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-zinc-400 to-red-400">Racing</span>
         </h1>
         <p class="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">
-          Scale your business with our world-class, premium digital solutions tailored for the next generation.
+          Experience the ultimate Formula 1 dashboard. Real-time telemetry, factual driver standings, and immersive race analytics.
         </p>
         <div class="flex flex-col sm:flex-row gap-5 justify-center">
           <button class="bg-white text-slate-950 px-10 py-4 rounded-full font-bold text-lg hover:bg-slate-200 transition-all shadow-xl">Start Building Now</button>
@@ -403,15 +404,11 @@ const FeatureCard = ({ icon: Icon, title, description }) => (
 );
 
 export default function App() {
-  const features = [
-    { icon: Rocket, title: "Swift Deployment", description: "Automated CI/CD pipelines ensuring your code reaches production in seconds." },
-    { icon: Shield, title: "Enterprise Security", description: "Military-grade encryption and advanced security protocols protecting your data." },
-    { icon: Zap, title: "Peak Performance", description: "Optimized runtime environments delivering sub-millisecond response times." },
-    { icon: Globe, title: "Global Scale", description: "Edge infrastructure spanning 200+ global availability zones." },
-    { icon: Cpu, title: "AI Integration", description: "Native support for advanced LLMs and neural processing units." },
-    { icon: BarChart3, title: "Real-time Analytics", description: "Deep insights and behavioral tracking with live-streaming metrics." },
-    { icon: Users, title: "Team Collaboration", description: "Seamless multi-user editing and dynamic permission management." },
-    { icon: MessageSquare, title: "Omnichannel Support", description: "Integrated communication layers across all customer touchpoints." }
+  const drivers = [
+    { name: "Max Verstappen", team: "Red Bull Racing", description: "3x World Champion." },
+    { name: "Lewis Hamilton", team: "Mercedes-AMG", description: "7x World Champion." },
+    { name: "Lando Norris", team: "McLaren", description: "Rising star." },
+    { name: "Charles Leclerc", team: "Scuderia Ferrari", description: "Qualifying master." }
   ];
 
   return (
@@ -432,6 +429,7 @@ export default function App() {
       <main>
         <section className="relative pt-32 pb-48 px-6 text-center overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#312e81,transparent)] opacity-40 animate-pulse"></div>
+          <img src="https://images.unsplash.com/photo-1533130061792-64b345e4a833?auto=format&fit=crop&q=80&w=1200&h=800" alt="Racing Car" className="absolute inset-0 w-full h-full object-cover opacity-20 -z-10 shadow-inner" />
           <div className="max-w-7xl mx-auto relative z-10">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-indigo-400 text-xs font-bold mb-8 tracking-[0.2em] uppercase">
               <span className="relative flex h-2 w-2">
@@ -441,10 +439,10 @@ export default function App() {
               Now Processing Version 2025
             </div>
             <h1 className="text-6xl md:text-9xl font-black text-white mb-12 tracking-tight leading-[0.9]">
-              Engineering the <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400">Future</span>
+              Elite <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500">Performance</span>
             </h1>
             <p className="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto mb-16 font-light leading-relaxed">
-              Scale your business with world-class, premium digital solutions tailored for the next generation of industry leaders.
+              Tracking the 2024 FIA Formula One World Championship with precision data and immersive visuals.
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center">
               <button className="bg-white text-slate-950 px-12 py-5 rounded-full font-black text-xl hover:scale-105 transition-all shadow-2xl">Start Building Now</button>
@@ -459,17 +457,8 @@ export default function App() {
           </div>
         </section>
 
-        <section className="bg-slate-900/50 py-32 border-y border-white/5">
-           <div className="max-w-4xl mx-auto px-6 text-center">
-              <h2 className="text-4xl font-bold text-white mb-6">Built for Scaling</h2>
-              <p className="text-slate-400 mb-12">Our multi-region architecture ensures your application is always close to your users.</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                 <div><div className="text-3xl font-bold text-indigo-400">99.9%</div><div className="text-xs uppercase tracking-widest mt-2">Uptime SLA</div></div>
-                 <div><div className="text-3xl font-bold text-indigo-400">200+</div><div className="text-xs uppercase tracking-widest mt-2">Edge Locations</div></div>
-                 <div><div className="text-3xl font-bold text-indigo-400">5ms</div><div className="text-xs uppercase tracking-widest mt-2">Latency</div></div>
-                 <div><div className="text-3xl font-bold text-indigo-400">10k+</div><div className="text-xs uppercase tracking-widest mt-2">Enterprise Clients</div></div>
-              </div>
-           </div>
+        <section className="bg-slate-900/50 py-20 border-y border-white/5 text-center">
+            <h2 className="text-3xl font-bold text-white mb-8">99.9% Uptime SLA</h2>
         </section>
       </main>
 
