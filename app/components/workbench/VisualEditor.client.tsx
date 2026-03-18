@@ -25,31 +25,6 @@ import { workbenchStore } from '~/lib/stores/workbench';
 // Our bolt.diy overrides for GrapeJS styling
 import '~/lib/styles/grapesjs-overrides.css';
 
-// Global cache for the Tailwind script to avoid repeated network requests
-let tailwindScriptCache: string | null = null;
-
-async function getTailwindScript() {
-  if (tailwindScriptCache) {
-    return tailwindScriptCache;
-  }
-
-  try {
-    // We fetch on the main thread to bypass COEP/CORS issues in the iframe
-    const response = await fetch('https://cdn.tailwindcss.com');
-
-    if (response.ok) {
-      tailwindScriptCache = await response.text();
-      return tailwindScriptCache;
-    }
-
-    return null;
-  } catch {
-    // Log as info, not error, to keep console clean if fetch fails normally
-    console.info('[VisualEditor] Fetch for Tailwind CDN failed (CORS/Network), using fallback script tag in iframe.');
-    return null;
-  }
-}
-
 async function getTailwindConfig(wc: any) {
   const configs = ['tailwind.config.js', 'tailwind.config.ts', 'tailwind.config.cjs', 'tailwind.config.mjs'];
 
@@ -204,23 +179,15 @@ async function injectTailwindToDoc(doc: Document, wc: any, hasTailwind: boolean)
       }
     `;
 
-    // 3. Inject Tailwind Library via textContent (most resilient bypass for COEP/CORS)
-    const twScript = await getTailwindScript();
-
-    if (twScript && !doc.querySelector('script#tailwind-cdn-bypass')) {
+    // 3. Inject Tailwind Library (using robust local proxy bypass for COEP/CORS)
+    if (!doc.querySelector('script#tailwind-cdn-bypass')) {
       const script = doc.createElement('script');
       script.id = 'tailwind-cdn-bypass';
-      script.textContent = twScript;
+      script.src = '/api/tailwind'; // Using local proxy
+      script.crossOrigin = 'anonymous'; // Important for COEP
+
       doc.head.appendChild(script);
-      console.info('[VisualEditor] Tailwind library injected via textContent.');
-    } else if (!twScript && !doc.querySelector('script#tailwind-cdn-fallback')) {
-      // 3b. If fetch fails, we MUST fallback to a direct src tag (with crossOrigin!)
-      const script = doc.createElement('script');
-      script.id = 'tailwind-cdn-fallback';
-      script.src = 'https://cdn.tailwindcss.com';
-      script.crossOrigin = 'anonymous'; // Vital for COEP isolated environments
-      doc.head.appendChild(script);
-      console.info('[VisualEditor] Tailwind library injected via fallback src script.');
+      console.info('[VisualEditor] Tailwind library injected via API proxy.');
     }
 
     // 4. Robust Rendering Loop
@@ -935,7 +902,13 @@ export const VisualEditor = memo(() => {
             // Sync body class and background
             if (bodyClass) {
               try {
+                // Preserve GrapesJS internal classes (like gjs-dashed for outlines)
+                const gjsClasses = Array.from(canvasDoc.body.classList as any as string[]).filter((c) =>
+                  c.startsWith('gjs-'),
+                );
                 canvasDoc.body.className = bodyClass;
+                gjsClasses.forEach((c) => canvasDoc.body.classList.add(c));
+
                 editor.getWrapper().setAttributes({ class: bodyClass });
                 editor.getWrapper().addStyle({ 'background-color': 'inherit' });
 
@@ -1280,7 +1253,14 @@ export const VisualEditor = memo(() => {
             if (bodyClass) {
               try {
                 editor.getWrapper().setAttributes({ class: bodyClass });
+
+                // Preserve internal body classes
+                const gjsClasses = Array.from(canvasDoc.body.classList as any as string[]).filter((c) =>
+                  c.startsWith('gjs-'),
+                );
                 canvasDoc.body.className = bodyClass;
+                gjsClasses.forEach((c) => canvasDoc.body.classList.add(c));
+
                 editor.getWrapper().addStyle({ 'background-color': 'inherit' });
 
                 if (
@@ -1305,7 +1285,11 @@ export const VisualEditor = memo(() => {
 
                 if (bodyClass) {
                   try {
+                    const gjsClasses = Array.from(frameDoc.body.classList as any as string[]).filter((c) =>
+                      c.startsWith('gjs-'),
+                    );
                     frameDoc.body.className = bodyClass;
+                    gjsClasses.forEach((c) => frameDoc.body.classList.add(c));
                   } catch {
                     // ignore
                   }
@@ -1314,6 +1298,11 @@ export const VisualEditor = memo(() => {
             });
           }
         }, 300);
+
+        editor.on('load', () => {
+          // Explicitly turn on wireframe/dashed borders for the builder experience
+          editor.runCommand('core:component-outline');
+        });
 
         visualEditorSyncedAtom.set(true);
         setLoadStatus('loaded-from-file');
