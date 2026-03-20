@@ -277,7 +277,7 @@ I'll set up a premium, dark-themed static website for you.
   <main>
     <section class="relative pt-24 pb-32 px-6 overflow-hidden text-center">
       <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#312e81,transparent)] opacity-40"></div>
-      <img src="https://images.unsplash.com/photo-1542332213-31f87348057f?auto=format&fit=crop&q=80&w=1200&h=800" alt="Racing Background" class="absolute inset-0 w-full h-full object-cover opacity-20 -z-10 animate-pulse">
+      <img src="https://loremflickr.com/1200/800/race,car?lock=11" alt="Racing Background" class="absolute inset-0 w-full h-full object-cover opacity-20 -z-10 animate-pulse" crossorigin="anonymous">
       <div class="max-w-7xl mx-auto relative z-10">
         <h1 class="text-6xl md:text-8xl font-black tracking-tighter text-white mb-8 leading-[1.1]">
           The Pinnacle of <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-zinc-400 to-red-400">Racing</span>
@@ -429,7 +429,7 @@ export default function App() {
       <main>
         <section className="relative pt-32 pb-48 px-6 text-center overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#312e81,transparent)] opacity-40 animate-pulse"></div>
-          <img src="https://images.unsplash.com/photo-1533130061792-64b345e4a833?auto=format&fit=crop&q=80&w=1200&h=800" alt="Racing Car" className="absolute inset-0 w-full h-full object-cover opacity-20 -z-10 shadow-inner" />
+          <img src="https://loremflickr.com/1200/800/race,car?lock=12" alt="Racing Car" className="absolute inset-0 w-full h-full object-cover opacity-20 -z-10 shadow-inner" crossorigin="anonymous" />
           <div className="max-w-7xl mx-auto relative z-10">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-indigo-400 text-xs font-bold mb-8 tracking-[0.2em] uppercase">
               <span className="relative flex h-2 w-2">
