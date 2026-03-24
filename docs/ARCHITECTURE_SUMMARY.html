@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bolt.diy | Technical Architecture Summary</title>
+    <style>
+      :root {
+        --bg: #020617;
+        --surface: #0f172a;
+        --border: #1e293b;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --accent: #6366f1;
+      }
+      body {
+        background-color: var(--bg);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 40px;
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        max-width: 900px;
+        width: 100%;
+      }
+      header {
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 20px;
+        margin-bottom: 40px;
+      }
+      h1 {
+        font-size: 2.5rem;
+        margin: 0;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+      }
+      h2 {
+        font-size: 1.5rem;
+        margin-top: 40px;
+        color: var(--accent);
+        font-weight: 700;
+        border-left: 4px solid var(--accent);
+        padding-left: 15px;
+      }
+      .grid {
+        display: grid;
+        grid-template-cols: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .card h3 {
+        margin-top: 0;
+        color: #fff;
+        font-size: 1.2rem;
+      }
+      .card p {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+      }
+      .flow-container {
+        background: #000;
+        padding: 30px;
+        border-radius: 12px;
+        margin-top: 20px;
+        border: 1px dashed #334155;
+      }
+      .step {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .step-num {
+        background: var(--accent);
+        color: #fff;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-top: 5px;
+      }
+      .step-content h4 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: #fff;
+      }
+      .step-content p {
+        margin: 5px 0 0;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+      }
+      code {
+        background: #1e293b;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        color: #cbd5e1;
+      }
+      .highlight {
+        color: #facc15;
+        font-weight: 600;
+      }
+      footer {
+        margin-top: 60px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        border-top: 1px solid var(--border);
+        padding-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Application Architecture Summary</h1>
+        <p style="color: var(--text-secondary); font-weight: 500">Core Internal Systems & Production Data Lifecycle</p>
+      </header>
+
+      <p>
+        This document provides a comprehensive technical breakdown of how Bolt.diy functions as an autonomous
+        development environment. It covers the interaction between the LLM, the browser runtime, and the deployment
+        systems.
+      </p>
+
+      <h2>1. The Four Behavioral Pillars</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>The LLM Orchestrator</h3>
+          <p>
+            Located in <code>api.chat.ts</code>. It uses the Vercel AI SDK to bridge your chat messages with advanced
+            models. It injects strict system prompts and your current file context into every request.
+          </p>
+        </div>
+        <div class="card">
+          <h3>WebContainer Runtime</h3>
+          <p>
+            A virtual Node.js operating system running in your browser tab. It handles local file system operations,
+            runs terminal commands (npm/pnpm), and hosts the local preview server.
+          </p>
+        </div>
+        <div class="card">
+          <h3>ActionRunner Engine</h3>
+          <p>
+            The "Hands" of the AI. It parses the incoming text stream for <code>&lt;boltAction&gt;</code> tags and
+            real-time updates the WebContainer's files before the AI even finishes responding.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Cloud Bridge (Deploy)</h3>
+          <p>
+            Located in <code>api.deploy-docker.ts</code>. It packages your browser-native code into Docker images,
+            applies analytics, and pushes the result to the Fly.io global infrastructure.
+          </p>
+        </div>
+      </div>
+
+      <h2>2. Data Lifecycle: Input to Production</h2>
+      <div class="flow-container">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Prompt Processing</h4>
+            <p>
+              The frontend gathers your current code state and sends it as a "context buffer" to the server. Your query
+              is wrapped in rules that enforce Tailwind, strict factuality, and error-free code.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Real-time Execution</h4>
+            <p>
+              As the AI streams individual characters, the
+              <span class="highlight">StreamingMessageParser</span> identifies code blocks. The
+              <span class="highlight">ActionRunner</span> instantly executes file writes or shell commands in your
+              WebContainer.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Hot Reload Preview</h4>
+            <p>
+              A local dev server (defaulting to port 5173) starts within the WebContainer. Bolt.diy detects this open
+              port and automatically points the preview window to the internal proxy.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Deployment & Injection</h4>
+            <p>
+              When you click 'Deploy', the server receives your files. <span class="highlight">Crucially:</span> It
+              searches for <code>&lt;/body&gt;</code> in your HTML and automatically injects a tracking beacon script
+              for analytics before packaging the Docker image.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Production Analytics</h4>
+            <p>
+              Your app goes live on <code>fly.dev</code>. Every visit pings <code>/api/stats</code> (in
+              <code>api.stats.ts</code>). This records the app name, path, and session ID anonymously to update your
+              dashboard.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <h2>3. Technical Nuances & Discovery</h2>
+      <p>
+        One of the most unique aspects of the architecture is the <strong>"Shadow Metadata"</strong> injection. Because
+        analytics are injected during the deployment middleware rather than written by the AI, the source code you see
+        in the editor remains "clean," while the production site is fully instrumented for tracking.
+      </p>
+      <p>
+        Additionally, <strong>GrapesJS Integration</strong> works by observing code changes and dynamically pulling the
+        generated Tailwind CSS from the WebContainer's virtual terminal and injecting it into the GrapesJS iframe,
+        solving the isolation problem typical of visual builders.
+      </p>
+
+      <footer>Technical Architecture Document | Generated by Bolt.diy Systems</footer>
+    </div>
+  </body>
+</html>
