@@ -24,16 +24,23 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: 'Missing imageName or files' }, { status: 400 });
     }
 
+    /*
+     * NGINE / air-gapped compatibility:
+     * Replace external CDN references (Tailwind, Chart.js, etc.) with local
+     * bundled copies so deployed apps work without internet access.
+     */
+    const processedFiles = await replaceCdnWithLocal(files);
+
     if (deployAction === 'package') {
-      return handlePackage(imageName, files);
+      return handlePackage(imageName, processedFiles);
     } else if (deployAction === 'build') {
-      return handleBuild(imageName, files);
+      return handleBuild(imageName, processedFiles);
     } else if (deployAction === 'fly-deploy') {
       const flyAppName = body.flyAppName || imageName.replace(/[/:]/g, '-');
       const flyRegion = body.flyRegion || 'iad';
       const boltUrl = body.boltUrl;
 
-      return handleFlyDeploy(imageName, files, flyAppName, flyRegion, boltUrl);
+      return handleFlyDeploy(imageName, processedFiles, flyAppName, flyRegion, boltUrl);
     }
 
     return json({ error: 'Invalid action. Use "package", "build", or "fly-deploy".' }, { status: 400 });
@@ -540,4 +547,149 @@ async function handleFlyDeploy(
       headers: { 'Content-Type': 'application/json' },
     });
   }
+}
+
+/**
+ * CDN-to-Local Replacement for Air-Gapped / NGINE Deployments
+ * ============================================================
+ *
+ * Scans all HTML files in the deployment package for external CDN
+ * script references and replaces them with local relative paths.
+ * The corresponding bundled JS files are injected into the package
+ * so the deployed app is fully self-contained.
+ *
+ * Currently handles:
+ *   - Tailwind CSS (cdn.tailwindcss.com) → tailwind-cdn.js
+ *   - Chart.js (cdn.jsdelivr.net/npm/chart.js) → chart.umd.js  [if bundled]
+ *
+ * To add more libraries, extend the `cdnMappings` array below.
+ */
+
+interface CdnMapping {
+  /** Human-readable name for logging */
+  name: string;
+
+  /** Regex to match the <script> tag in HTML (must have global + case-insensitive flags) */
+  pattern: RegExp;
+
+  /** The replacement <script> tag using a local relative path */
+  replacement: string;
+
+  /** Filename of the local bundled file (in public/) */
+  localFileName: string;
+}
+
+const CDN_MAPPINGS: CdnMapping[] = [
+  {
+    name: 'Tailwind CSS',
+    pattern: /<script\s+src=["']https?:\/\/cdn\.tailwindcss\.com\/?[^"']*["'][^>]*>\s*<\/script>/gi,
+    replacement: '<script src="tailwind-cdn.js"></script>',
+    localFileName: 'tailwind-cdn.js',
+  },
+  {
+    name: 'Chart.js',
+    pattern: /<script\s+src=["']https?:\/\/cdn\.jsdelivr\.net\/npm\/chart\.js[^"']*["'][^>]*>\s*<\/script>/gi,
+    replacement: '<script src="chart.umd.js"></script>',
+    localFileName: 'chart.umd.js',
+  },
+];
+
+async function replaceCdnWithLocal(files: Record<string, string>): Promise<Record<string, string>> {
+  const processed = { ...files };
+  const neededFiles = new Set<string>();
+
+  // Scan all HTML files and replace CDN references with local paths
+  for (const [filePath, content] of Object.entries(processed)) {
+    if (!filePath.endsWith('.html')) {
+      continue;
+    }
+
+    let newContent = content;
+
+    for (const mapping of CDN_MAPPINGS) {
+      // Create a fresh regex to avoid lastIndex issues
+      const freshPattern = new RegExp(mapping.pattern.source, mapping.pattern.flags);
+
+      if (freshPattern.test(newContent)) {
+        neededFiles.add(mapping.localFileName);
+
+        // Create another fresh regex for the actual replacement
+        const replacePattern = new RegExp(mapping.pattern.source, mapping.pattern.flags);
+        newContent = newContent.replace(replacePattern, mapping.replacement);
+
+        logger.info(`[CDN→Local] Replaced ${mapping.name} CDN reference in ${filePath}`);
+      }
+    }
+
+    if (newContent !== content) {
+      processed[filePath] = newContent;
+    }
+  }
+
+  // Inject the bundled local files into the deployment package
+  for (const fileName of neededFiles) {
+    // Skip if the project already includes this file
+    if (processed[fileName]) {
+      logger.info(`[CDN→Local] ${fileName} already present in project, skipping injection`);
+      continue;
+    }
+
+    const bundledContent = await readBundledFile(fileName);
+
+    if (bundledContent) {
+      processed[fileName] = bundledContent;
+      logger.info(`[CDN→Local] Injected bundled ${fileName} (${(bundledContent.length / 1024).toFixed(0)} KB)`);
+    } else {
+      logger.warn(
+        `[CDN→Local] Could not find bundled ${fileName}. ` +
+          `Deployed app may not work offline. ` +
+          `Place the file in public/${fileName} to fix this.`,
+      );
+    }
+  }
+
+  return processed;
+}
+
+/**
+ * Reads a bundled library file from the public/ directory.
+ * Falls back to fetching from CDN if the local file is not found
+ * (useful during development, but won't work on NGINE).
+ */
+async function readBundledFile(fileName: string): Promise<string | null> {
+  // 1. Try local bundled file
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const localPath = join(process.cwd(), 'public', fileName);
+
+    return await readFile(localPath, 'utf-8');
+  } catch {
+    logger.warn(`[CDN→Local] Local file public/${fileName} not found, trying CDN fallback...`);
+  }
+
+  // 2. Fallback: fetch from CDN (only works with internet access)
+  const cdnUrls: Record<string, string> = {
+    'tailwind-cdn.js': 'https://cdn.tailwindcss.com',
+    'chart.umd.js': 'https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.js',
+  };
+
+  const cdnUrl = cdnUrls[fileName];
+
+  if (cdnUrl) {
+    try {
+      const response = await fetch(cdnUrl);
+
+      if (response.ok) {
+        const content = await response.text();
+        logger.info(`[CDN→Local] Fetched ${fileName} from CDN fallback (${(content.length / 1024).toFixed(0)} KB)`);
+
+        return content;
+      }
+    } catch {
+      logger.warn(`[CDN→Local] CDN fallback for ${fileName} also failed`);
+    }
+  }
+
+  return null;
 }
