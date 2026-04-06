@@ -347,15 +347,10 @@ export class ActionRunner {
 
     logger.info(`[#runShellAction] Calling shell.executeCommand with: ${action.content}`);
 
-    const resp = await shell.executeCommand(
-      this.runnerId.get(),
-      action.content,
-      () => {
-        logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
-        action.abort();
-      },
-      60000,
-    );
+    const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
+      logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
+      action.abort();
+    });
     logger.info(`[#runShellAction] ${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
@@ -386,15 +381,10 @@ export class ActionRunner {
     // Store the command for auto-restart
     this.#currentStartCommand = action.content;
 
-    const resp = await shell.executeCommand(
-      this.runnerId.get(),
-      action.content,
-      () => {
-        logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
-        action.abort();
-      },
-      120000,
-    );
+    const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
+      logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
+      action.abort();
+    });
     logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
@@ -453,14 +443,9 @@ export class ActionRunner {
 
       logger.info('[autoInstall] Dependencies detected but node_modules missing, running npm install...');
 
-      const installResp = await shell.executeCommand(
-        this.runnerId.get(),
-        'npm install --no-audit --no-fund',
-        () => {
-          // intentionally empty - no output processing needed
-        },
-        180000,
-      ); // 3 minute timeout for install
+      const installResp = await shell.executeCommand(this.runnerId.get(), 'npm install --no-audit --no-fund', () => {
+        // intentionally empty - no output processing needed
+      }); // 3 minute timeout for install
 
       if (installResp?.exitCode === 0) {
         logger.info('[autoInstall] npm install completed successfully');

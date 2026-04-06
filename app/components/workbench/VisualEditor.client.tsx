@@ -18,6 +18,8 @@ import {
   visualEditorCssAtom,
   visualEditorSyncedAtom,
   visualEditorUpdateSignalAtom,
+  visualEditorPagesAtom,
+  visualEditorCurrentPageAtom,
 } from '~/lib/stores/visualEditorStore';
 import { webcontainer } from '~/lib/webcontainer';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -135,6 +137,38 @@ async function findAndReadIndexHtml(wc: any): Promise<{ content: string; path: s
   }
 
   return { content: '', path: '' };
+}
+
+/**
+ * Recursively scans the WebContainer file system for all .html files.
+ * Skips node_modules, dist, .git, and other build directories.
+ */
+async function scanForHtmlPages(wc: any, dir: string = '.'): Promise<string[]> {
+  const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.cache', '.bolt']);
+  const results: string[] = [];
+
+  try {
+    const entries = await wc.fs.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const name = typeof entry === 'string' ? entry : entry.name;
+      const isDir = typeof entry === 'string' ? false : entry.isDirectory();
+      const fullPath = dir === '.' ? name : `${dir}/${name}`;
+
+      if (isDir) {
+        if (!SKIP_DIRS.has(name)) {
+          const subResults = await scanForHtmlPages(wc, fullPath);
+          results.push(...subResults);
+        }
+      } else if (name.endsWith('.html')) {
+        results.push(fullPath);
+      }
+    }
+  } catch {
+    // Directory might not exist or be unreadable
+  }
+
+  return results;
 }
 
 /**
@@ -346,6 +380,110 @@ const BLOCKS = [
       ],
     },
     media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="13" height="22" rx="1"/><rect x="17" y="3" width="14" height="22" rx="1"/><rect x="33" y="3" width="13" height="22" rx="1"/></svg>`,
+  },
+
+  // ── Sections — Common page layouts (Header, Hero, Features, etc.) ────────
+  {
+    id: 'section-text',
+    label: 'Text',
+    category: 'Sections',
+    content: `<section style="padding:64px 24px;text-align:center;width:100%;">
+  <div style="max-width:800px;margin:0 auto;">
+    <h2 style="font-size:3rem;font-weight:700;margin:0 0 16px;">Your Heading Here</h2>
+    <p style="font-size:1.125rem;opacity:0.8;margin:0 0 32px;line-height:1.6;">Provide a short description of your website or product. This text should be engaging and informative.</p>
+    <div style="display:flex;gap:16px;justify-content:center;">
+      <a href="#" style="padding:12px 28px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Button</a>
+      <a href="#" style="padding:12px 28px;background:rgba(124, 58, 237, 0.2);color:#7c3aed;border-radius:6px;text-decoration:none;font-weight:600;">Button</a>
+    </div>
+  </div>
+</section>`,
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="12" y="6" width="24" height="2"/><rect x="8" y="12" width="32" height="2"/><rect x="16" y="18" width="6" height="4" rx="1"/><rect x="26" y="18" width="6" height="4" rx="1"/></svg>`,
+  },
+  {
+    id: 'section-image',
+    label: 'Section image',
+    category: 'Sections',
+    content: `<section style="padding:24px;width:100%;">
+  <img src="https://placehold.co/1200x600?text=Section+Image" alt="Section Image" style="width:100%;height:auto;border-radius:12px;display:block;">
+</section>`,
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="40" height="20" rx="2"/><path d="M4 18l10-10 12 12 8-8 6 6"/><circle cx="34" cy="10" r="2"/></svg>`,
+  },
+  {
+    id: 'section-carousel',
+    label: 'Image carousel',
+    category: 'Sections',
+    content: `<section style="padding:48px 24px;display:flex;align-items:center;justify-content:center;gap:24px;width:100%;">
+  <div style="width:40px;height:40px;border-radius:50%;background:rgba(128,128,128,0.2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">←</div>
+  <div style="flex:1;max-width:800px;">
+    <img src="https://placehold.co/800x400?text=Carousel+Image" alt="Carousel" style="width:100%;height:auto;border-radius:12px;display:block;">
+  </div>
+  <div style="width:40px;height:40px;border-radius:50%;background:rgba(128,128,128,0.2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">→</div>
+</section>`,
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="12" y="4" width="24" height="20" rx="2"/><circle cx="6" cy="14" r="3"/><circle cx="42" cy="14" r="3"/><path d="M12 18l6-6 6 6 2-2 4 4"/><circle cx="28" cy="10" r="1.5"/></svg>`,
+  },
+  {
+    id: 'section-image-text',
+    label: 'Image and text',
+    category: 'Sections',
+    content: `<section style="padding:64px 24px;width:100%;">
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:48px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:300px;">
+      <img src="https://placehold.co/600x400?text=Image" alt="Feature" style="width:100%;height:auto;border-radius:12px;display:block;">
+    </div>
+    <div style="flex:1;min-width:300px;">
+      <h2 style="font-size:2.5rem;font-weight:700;margin:0 0 16px;">Heading Text</h2>
+      <p style="font-size:1.125rem;opacity:0.8;margin:0 0 24px;line-height:1.6;">Describe the feature or benefit here. Make it clear and easy to read for your users.</p>
+      <a href="#" style="padding:12px 28px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">Learn more</a>
+    </div>
+  </div>
+</section>`,
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="16" height="16" rx="2"/><circle cx="14" cy="11" r="1.5"/><path d="M4 18l6-6 4 4 2-2 4 4"/><rect x="26" y="8" width="18" height="2"/><rect x="26" y="14" width="14" height="2"/><rect x="26" y="20" width="8" height="2"/></svg>`,
+  },
+  {
+    id: 'section-text-image',
+    label: 'Text and image',
+    category: 'Sections',
+    content: `<section style="padding:64px 24px;width:100%;">
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:48px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:300px;">
+      <h2 style="font-size:2.5rem;font-weight:700;margin:0 0 16px;">Heading Text</h2>
+      <p style="font-size:1.125rem;opacity:0.8;margin:0 0 24px;line-height:1.6;">Describe the feature or benefit here. Make it clear and easy to read for your users.</p>
+      <a href="#" style="padding:12px 28px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">Learn more</a>
+    </div>
+    <div style="flex:1;min-width:300px;">
+      <img src="https://placehold.co/600x400?text=Image" alt="Feature" style="width:100%;height:auto;border-radius:12px;display:block;">
+    </div>
+  </div>
+</section>`,
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="18" height="2"/><rect x="4" y="14" width="14" height="2"/><rect x="4" y="20" width="8" height="2"/><rect x="28" y="6" width="16" height="16" rx="2"/><circle cx="38" cy="11" r="1.5"/><path d="M28 18l6-6 4 4 2-2 4 4"/></svg>`,
+  },
+  {
+    id: 'section-columns',
+    label: 'Columns',
+    category: 'Sections',
+    content: `<section style="padding:64px 24px;text-align:center;width:100%;">
+  <div style="max-width:1200px;margin:0 auto;">
+    <h2 style="font-size:2.5rem;font-weight:700;margin:0 0 48px;">Our Features</h2>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;justify-content:center;">
+      <div style="flex:1;min-width:250px;">
+        <img src="https://placehold.co/400x300?text=Feature+1" alt="Feature" style="width:100%;height:auto;border-radius:8px;margin-bottom:16px;">
+        <h3 style="font-size:1.25rem;font-weight:600;margin:0 0 8px;">Feature One</h3>
+        <p style="opacity:0.8;line-height:1.5;">Short description for feature one goes here.</p>
+      </div>
+      <div style="flex:1;min-width:250px;">
+        <img src="https://placehold.co/400x300?text=Feature+2" alt="Feature" style="width:100%;height:auto;border-radius:8px;margin-bottom:16px;">
+        <h3 style="font-size:1.25rem;font-weight:600;margin:0 0 8px;">Feature Two</h3>
+        <p style="opacity:0.8;line-height:1.5;">Short description for feature two goes here.</p>
+      </div>
+      <div style="flex:1;min-width:250px;">
+        <img src="https://placehold.co/400x300?text=Feature+3" alt="Feature" style="width:100%;height:auto;border-radius:8px;margin-bottom:16px;">
+        <h3 style="font-size:1.25rem;font-weight:600;margin:0 0 8px;">Feature Three</h3>
+        <p style="opacity:0.8;line-height:1.5;">Short description for feature three goes here.</p>
+      </div>
+    </div>
+  </div>
+</section>`,
+    media: `<svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="11" height="8" rx="1"/><rect x="18" y="6" width="11" height="8" rx="1"/><rect x="32" y="6" width="11" height="8" rx="1"/><rect x="4" y="18" width="11" height="2"/><rect x="18" y="18" width="11" height="2"/><rect x="32" y="18" width="11" height="2"/><rect x="4" y="22" width="8" height="2"/><rect x="18" y="22" width="8" height="2"/><rect x="32" y="22" width="8" height="2"/></svg>`,
   },
 
   // ── Text — content elements that can be placed into layout blocks ────────
@@ -785,12 +923,177 @@ export const VisualEditor = memo(() => {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<any>(null);
   const originalHtmlRef = useRef<string>('');
-  const indexHtmlPathRef = useRef<string>('');
+  const currentFilePathRef = useRef<string>('');
   const [, setLoadStatus] = useState<'loading' | 'loaded-from-file' | 'blank'>('loading');
   const updateSignal = useStore(visualEditorUpdateSignalAtom);
+  const currentPage = useStore(visualEditorCurrentPageAtom);
   const isSyncingFromExternalRef = useRef(false);
   const hasTailwindRef = useRef(false);
 
+  // ── Helper: Load a specific HTML file into the GrapesJS canvas ──
+  const loadFileIntoCanvas = async (editor: any, filePath: string) => {
+    try {
+      const wc = await webcontainer;
+      let htmlContent = '';
+
+      try {
+        htmlContent = await wc.fs.readFile(filePath, 'utf-8');
+      } catch {
+        console.warn(`[VisualEditor] Could not read file: ${filePath}`);
+        return;
+      }
+
+      if (!htmlContent) {
+        console.warn(`[VisualEditor] File is empty: ${filePath}`);
+        return;
+      }
+
+      const {
+        bodyHtml,
+        cssContent: inlineCss,
+        scriptUrls: externalScripts,
+        bodyClass,
+      } = parseHtmlDocument(htmlContent);
+
+      // ── Read linked CSS files ──
+      let linkedCss = '';
+      const externalStyleUrls: string[] = [];
+
+      const linkMatches = [
+        ...htmlContent.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["']/gi),
+        ...htmlContent.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet["']/gi),
+      ];
+      const hrefs = [...new Set(linkMatches.map((m) => m[1]))];
+
+      for (const href of hrefs) {
+        if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) {
+          externalStyleUrls.push(href);
+          continue;
+        }
+
+        const relativePath = href.replace(/^\//, '');
+
+        try {
+          const cssFileContent = await wc.fs.readFile(relativePath, 'utf-8');
+
+          if (cssFileContent) {
+            linkedCss += `\n/* ── ${relativePath} ── */\n${cssFileContent}\n`;
+          }
+        } catch {
+          // File not found
+        }
+      }
+
+      // Deep Scan: Also read non-linked common CSS files (Vite-style)
+      const commonCss = await readCommonCss(wc);
+
+      const hasTailwind = await detectTailwind(wc, htmlContent, linkedCss + commonCss);
+      hasTailwindRef.current = hasTailwind;
+
+      const allCss = [inlineCss, linkedCss, commonCss].filter(Boolean).join('\n');
+
+      // Guard flag: prevent syncExport from writing back while we update
+      isSyncingFromExternalRef.current = true;
+
+      if (bodyHtml) {
+        editor.setComponents(bodyHtml);
+      }
+
+      if (allCss) {
+        editor.setStyle(allCss);
+      }
+
+      // Wait for GrapesJS to finish setting components
+      setTimeout(async () => {
+        let canvasDoc: Document | null = null;
+
+        try {
+          canvasDoc = editor.Canvas.getDocument();
+
+          if (!canvasDoc || !canvasDoc.head) {
+            canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
+          }
+        } catch (e) {
+          console.warn('[VisualEditor] Direct canvas access failed, falling back to frame element', e);
+          canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
+        }
+
+        if (canvasDoc) {
+          console.info('[VisualEditor] Syncing styling to canvas...', { hasTailwind, bodyClass });
+          await injectTailwindToDoc(canvasDoc, wc, hasTailwind);
+
+          // Sync body class and background
+          if (bodyClass) {
+            try {
+              const gjsClasses = Array.from(canvasDoc.body.classList as any as string[]).filter((c) =>
+                c.startsWith('gjs-'),
+              );
+              canvasDoc.body.className = bodyClass;
+              gjsClasses.forEach((c) => canvasDoc.body.classList.add(c));
+
+              editor.getWrapper().setAttributes({ class: bodyClass });
+              editor.getWrapper().addStyle({ 'background-color': 'inherit' });
+
+              if (
+                bodyClass.includes('slate-950') ||
+                bodyClass.includes('bg-[#0a0a0a]') ||
+                bodyClass.includes('bg-neutral-950') ||
+                bodyClass.includes('bg-black')
+              ) {
+                editor.getWrapper().addStyle({ 'background-color': '#020617' });
+              }
+            } catch (e) {
+              console.warn('[VisualEditor] Error syncing body attributes', e);
+            }
+          }
+
+          if (externalStyleUrls.length > 0) {
+            for (const url of externalStyleUrls) {
+              try {
+                if (!canvasDoc.querySelector(`link[href="${url}"]`)) {
+                  const link = canvasDoc.createElement('link');
+                  link.rel = 'stylesheet';
+                  link.href = url;
+                  canvasDoc.head.appendChild(link);
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+
+          // Inject non-Tailwind scripts
+          if (externalScripts.length > 0) {
+            for (const url of externalScripts) {
+              try {
+                if (!canvasDoc.querySelector(`script[src="${url}"]`)) {
+                  const script = canvasDoc.createElement('script');
+                  script.src = url;
+                  script.crossOrigin = 'anonymous';
+                  canvasDoc.head.appendChild(script);
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+        }
+      }, 300);
+
+      originalHtmlRef.current = htmlContent;
+      currentFilePathRef.current = filePath;
+
+      // Release guard after GrapeJS finishes its internal update cycle
+      setTimeout(() => {
+        isSyncingFromExternalRef.current = false;
+      }, 200);
+    } catch (err) {
+      isSyncingFromExternalRef.current = false;
+      console.warn('[VisualEditor] Failed to load file into canvas:', err);
+    }
+  };
+
+  // ── React to update signal (LLM wrote files) — reload current page & re-scan pages ──
   useEffect(() => {
     if (!editorRef.current) {
       return;
@@ -801,175 +1104,46 @@ export const VisualEditor = memo(() => {
     (async () => {
       console.info('[VisualEditor] Sync signal:', updateSignal);
 
-      try {
-        const wc = await webcontainer;
+      // Re-scan for pages (LLM may have created new .html files)
+      const wc = await webcontainer;
+      const pages = await scanForHtmlPages(wc);
+      visualEditorPagesAtom.set(pages);
 
-        let indexHtmlContent = '';
+      // Determine which file to load
+      let targetPath = currentFilePathRef.current;
 
-        if (indexHtmlPathRef.current) {
-          try {
-            indexHtmlContent = await wc.fs.readFile(indexHtmlPathRef.current, 'utf-8');
-          } catch {
-            // Path might be invalid/moved
-          }
+      if (!targetPath || !pages.includes(targetPath)) {
+        // Fall back to index.html or the first available page
+        const { path } = await findAndReadIndexHtml(wc);
+        targetPath = path || (pages.length > 0 ? pages[0] : '');
+
+        if (targetPath) {
+          visualEditorCurrentPageAtom.set(targetPath);
         }
+      }
 
-        if (!indexHtmlContent) {
-          const { content, path } = await findAndReadIndexHtml(wc);
-          indexHtmlContent = content;
-          indexHtmlPathRef.current = path;
-        }
-
-        if (!indexHtmlContent) {
-          console.warn('[VisualEditor] index.html missing or empty.');
-          return;
-        }
-
-        const {
-          bodyHtml,
-          cssContent: inlineCss,
-          scriptUrls: externalScripts,
-          bodyClass,
-        } = parseHtmlDocument(indexHtmlContent);
-
-        // ── Read linked CSS files ──
-        let linkedCss = '';
-        const externalStyleUrls: string[] = [];
-
-        const linkMatches = [
-          ...indexHtmlContent.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["']/gi),
-          ...indexHtmlContent.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet["']/gi),
-        ];
-        const hrefs = [...new Set(linkMatches.map((m) => m[1]))];
-
-        for (const href of hrefs) {
-          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) {
-            externalStyleUrls.push(href);
-            continue;
-          }
-
-          const relativePath = href.replace(/^\//, '');
-
-          try {
-            const cssFileContent = await wc.fs.readFile(relativePath, 'utf-8');
-
-            if (cssFileContent) {
-              linkedCss += `\n/* ── ${relativePath} ── */\n${cssFileContent}\n`;
-            }
-          } catch {
-            // File not found
-          }
-        }
-
-        // Deep Scan: Also read non-linked common CSS files (Vite-style)
-        const commonCss = await readCommonCss(wc);
-
-        const hasTailwind = await detectTailwind(wc, indexHtmlContent, linkedCss + commonCss);
-        hasTailwindRef.current = hasTailwind;
-
-        const allCss = [inlineCss, linkedCss, commonCss].filter(Boolean).join('\n');
-
-        // Guard flag: prevent syncExport from writing back while we update from LLM
-        isSyncingFromExternalRef.current = true;
-
-        if (bodyHtml) {
-          editor.setComponents(bodyHtml);
-        }
-
-        if (allCss) {
-          editor.setStyle(allCss);
-        }
-
-        // Wait for GrapesJS to finish setting components
-        setTimeout(async () => {
-          let canvasDoc: Document | null = null;
-
-          try {
-            canvasDoc = editor.Canvas.getDocument();
-
-            if (!canvasDoc || !canvasDoc.head) {
-              canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
-            }
-          } catch (e) {
-            console.warn('[VisualEditor] Direct canvas access failed, falling back to frame element', e);
-            canvasDoc = editor.Canvas.getFrameEl()?.contentDocument;
-          }
-
-          if (canvasDoc) {
-            console.info('[VisualEditor] Syncing styling to canvas...', { hasTailwind, bodyClass });
-            await injectTailwindToDoc(canvasDoc, wc, hasTailwind);
-
-            // Sync body class and background
-            if (bodyClass) {
-              try {
-                // Preserve GrapesJS internal classes (like gjs-dashed for outlines)
-                const gjsClasses = Array.from(canvasDoc.body.classList as any as string[]).filter((c) =>
-                  c.startsWith('gjs-'),
-                );
-                canvasDoc.body.className = bodyClass;
-                gjsClasses.forEach((c) => canvasDoc.body.classList.add(c));
-
-                editor.getWrapper().setAttributes({ class: bodyClass });
-                editor.getWrapper().addStyle({ 'background-color': 'inherit' });
-
-                if (
-                  bodyClass.includes('slate-950') ||
-                  bodyClass.includes('bg-[#0a0a0a]') ||
-                  bodyClass.includes('bg-neutral-950') ||
-                  bodyClass.includes('bg-black')
-                ) {
-                  editor.getWrapper().addStyle({ 'background-color': '#020617' });
-                }
-              } catch (e) {
-                console.warn('[VisualEditor] Error syncing body attributes', e);
-              }
-            }
-
-            if (externalStyleUrls.length > 0) {
-              for (const url of externalStyleUrls) {
-                try {
-                  if (!canvasDoc.querySelector(`link[href="${url}"]`)) {
-                    const link = canvasDoc.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = url;
-                    canvasDoc.head.appendChild(link);
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-            }
-
-            // Inject non-Tailwind scripts
-            if (externalScripts.length > 0) {
-              for (const url of externalScripts) {
-                try {
-                  if (!canvasDoc.querySelector(`script[src="${url}"]`)) {
-                    const script = canvasDoc.createElement('script');
-                    script.src = url;
-                    script.crossOrigin = 'anonymous';
-                    canvasDoc.head.appendChild(script);
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          }
-        }, 300);
-
-        originalHtmlRef.current = indexHtmlContent;
-
-        // Release guard after GrapeJS finishes its internal update cycle
-        setTimeout(() => {
-          isSyncingFromExternalRef.current = false;
-        }, 200);
-      } catch (err) {
-        isSyncingFromExternalRef.current = false;
-        console.warn('[VisualEditor] Failed to sync LLM changes into canvas:', err);
+      if (targetPath) {
+        await loadFileIntoCanvas(editor, targetPath);
+      } else {
+        console.warn('[VisualEditor] No HTML files found.');
       }
     })();
   }, [updateSignal]);
+
+  // ── React to page switching (user selected a different page from the Pages menu) ──
+  useEffect(() => {
+    if (!editorRef.current || !currentPage) {
+      return;
+    }
+
+    // Only reload if the page actually changed
+    if (currentPage === currentFilePathRef.current) {
+      return;
+    }
+
+    console.info('[VisualEditor] Switching to page:', currentPage);
+    loadFileIntoCanvas(editorRef.current, currentPage);
+  }, [currentPage]);
 
   useEffect(() => {
     // Inject GrapeJS stock CSS into the page (if not already present)
@@ -1020,7 +1194,15 @@ export const VisualEditor = memo(() => {
       }
 
       originalHtmlRef.current = existingHtml;
-      indexHtmlPathRef.current = htmlFilePath;
+      currentFilePathRef.current = htmlFilePath;
+
+      // Populate pages atom and set current page
+      const pages = await scanForHtmlPages(wc);
+      visualEditorPagesAtom.set(pages);
+
+      if (htmlFilePath) {
+        visualEditorCurrentPageAtom.set(htmlFilePath);
+      }
 
       const {
         bodyHtml,
@@ -1774,13 +1956,13 @@ export const VisualEditor = memo(() => {
         visualEditorHtmlAtom.set(html);
         visualEditorCssAtom.set(css);
 
-        // Write changes back to index.html in WebContainer
-        if (indexHtmlPathRef.current && originalHtmlRef.current) {
+        // Write changes back to the current HTML file in WebContainer
+        if (currentFilePathRef.current && originalHtmlRef.current) {
           try {
             const updatedDoc = buildHtmlDocument(originalHtmlRef.current, html, css);
 
             const wc = await webcontainer;
-            await wc.fs.writeFile(indexHtmlPathRef.current, updatedDoc, 'utf-8');
+            await wc.fs.writeFile(currentFilePathRef.current, updatedDoc, 'utf-8');
 
             // Update our reference so subsequent writes use current state
             originalHtmlRef.current = updatedDoc;
