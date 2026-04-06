@@ -21,3 +21,15 @@ export const visualEditorSyncedAtom = atom<boolean>(false);
  * update the GrapeJS canvas so user edits and LLM edits stay in sync.
  */
 export const visualEditorUpdateSignalAtom = atom<number>(0);
+
+/**
+ * List of discovered .html page paths in the WebContainer.
+ * Populated by VisualEditor when it scans the file system.
+ */
+export const visualEditorPagesAtom = atom<string[]>([]);
+
+/**
+ * The currently active page path being edited in the visual builder.
+ * When changed, VisualEditor reloads the canvas with this file's content.
+ */
+export const visualEditorCurrentPageAtom = atom<string>('');
