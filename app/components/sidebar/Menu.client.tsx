@@ -14,6 +14,7 @@ import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
+import { Form, useRouteLoaderData } from '@remix-run/react';
 
 const menuVariants = {
   closed: {
@@ -64,6 +65,22 @@ function CurrentDateTime() {
 }
 
 export const Menu = () => {
+  const rootData = useRouteLoaderData<{
+    auth: {
+      required: boolean;
+      isAuthenticated: boolean;
+      user: {
+        id: string;
+        email?: string;
+        role: 'admin' | 'user';
+      } | null;
+    };
+  }>('root');
+
+  const isAuthenticated = Boolean(rootData?.auth?.isAuthenticated);
+  const authUserEmail = rootData?.auth?.user?.email;
+  const authEnabled = Boolean(rootData?.auth?.required);
+
   const { duplicateCurrentChat, exportChat } = useChatHistory();
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<ChatHistoryItem[]>([]);
@@ -342,7 +359,7 @@ export const Menu = () => {
           <div className="flex items-center gap-3">
             <HelpButton onClick={() => window.open('https://stackblitz-labs.github.io/bolt.diy/', '_blank')} />
             <span className="font-medium text-sm text-gray-900 dark:text-white truncate">
-              {profile?.username || 'Guest User'}
+              {authUserEmail || profile?.username || 'Guest User'}
             </span>
             <div className="flex items-center justify-center w-[32px] h-[32px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0">
               {profile?.avatar ? (
@@ -358,6 +375,32 @@ export const Menu = () => {
               )}
             </div>
           </div>
+        </div>
+        <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/60 dark:bg-gray-900/40 flex items-center justify-between gap-2">
+          <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+            {authEnabled
+              ? isAuthenticated
+                ? 'Authenticated session active'
+                : 'Authentication required'
+              : 'Authentication optional'}
+          </span>
+          {isAuthenticated ? (
+            <Form action="/logout" method="post">
+              <button
+                type="submit"
+                className="text-xs px-2 py-1 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                Log out
+              </button>
+            </Form>
+          ) : (
+            <a
+              href="/login"
+              className="text-xs px-2 py-1 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              Log in
+            </a>
+          )}
         </div>
         <CurrentDateTime />
         <div className="flex-1 flex flex-col h-full w-full overflow-hidden">

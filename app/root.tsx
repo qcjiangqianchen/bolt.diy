@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import type { LinksFunction } from '@remix-run/cloudflare';
+import { json, type LinksFunction, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
 import tailwindReset from '@unocss/reset/tailwind-compat.css?url';
 import { themeStore } from './lib/stores/theme';
@@ -14,6 +14,7 @@ import { cssTransition, ToastContainer } from 'react-toastify';
 import reactToastifyStyles from 'react-toastify/dist/ReactToastify.css?url';
 import globalStyles from './styles/index.scss?url';
 import xtermStyles from '@xterm/xterm/css/xterm.css?url';
+import { getSessionUser, isAuthRequired } from './lib/auth/session.server';
 
 import 'virtual:uno.css';
 
@@ -21,6 +22,25 @@ const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
   exit: 'animated fadeOutRight',
 });
+
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const user = await getSessionUser(request, context);
+  const authRequired = isAuthRequired(context);
+
+  return json({
+    auth: {
+      required: authRequired,
+      isAuthenticated: Boolean(user),
+      user: user
+        ? {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+          }
+        : null,
+    },
+  });
+}
 
 export const links: LinksFunction = () => [
   {

@@ -11,6 +11,7 @@ import { WORK_DIR } from '~/utils/constants';
 import type { DesignScheme } from '~/types/design-scheme';
 import { MCPService } from '~/lib/services/mcpService';
 import { StreamRecoveryManager } from '~/lib/.server/llm/stream-recovery';
+import { requireAuthenticatedUser } from '~/lib/auth/request-user.server';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -19,6 +20,12 @@ export async function action(args: ActionFunctionArgs) {
 const logger = createScopedLogger('api.chat');
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
+  const user = await requireAuthenticatedUser(request, context);
+
+  if (user instanceof Response) {
+    return user;
+  }
+
   const streamRecovery = new StreamRecoveryManager({
     timeout: 45000,
     maxRetries: 2,

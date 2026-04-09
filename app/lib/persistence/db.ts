@@ -13,6 +13,30 @@ export interface IChatMetadata {
 
 const logger = createScopedLogger('ChatHistory');
 
+function getUserScopedDatabaseName(): string {
+  if (typeof document === 'undefined') {
+    return 'boltHistory';
+  }
+
+  const cookieEntry = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('bolt_user_key='));
+
+  if (!cookieEntry) {
+    return 'boltHistory_anonymous';
+  }
+
+  const rawValue = cookieEntry.slice('bolt_user_key='.length);
+  const namespacedUser = decodeURIComponent(rawValue || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  if (!namespacedUser) {
+    return 'boltHistory_anonymous';
+  }
+
+  return `boltHistory_${namespacedUser}`;
+}
+
 // this is used at the top level and never rejects
 export async function openDatabase(): Promise<IDBDatabase | undefined> {
   if (typeof indexedDB === 'undefined') {
@@ -21,7 +45,7 @@ export async function openDatabase(): Promise<IDBDatabase | undefined> {
   }
 
   return new Promise((resolve) => {
-    const request = indexedDB.open('boltHistory', 2);
+    const request = indexedDB.open(getUserScopedDatabaseName(), 2);
 
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;
