@@ -4,6 +4,7 @@ import { generateText } from 'ai';
 import { MAX_TOKENS, isReasoningModel } from '~/lib/.server/llm/constants';
 import { getModel } from '~/lib/.server/llm/model-factory';
 import { createScopedLogger } from '~/utils/logger';
+import { requireAuthenticatedUser } from '~/lib/auth/request-user.server';
 
 export async function action(args: ActionFunctionArgs) {
   return llmCallAction(args);
@@ -12,6 +13,12 @@ export async function action(args: ActionFunctionArgs) {
 const logger = createScopedLogger('api.llmcall');
 
 async function llmCallAction({ context, request }: ActionFunctionArgs) {
+  const user = await requireAuthenticatedUser(request, context);
+
+  if (user instanceof Response) {
+    return user;
+  }
+
   const { system, message, streamOutput } = await request.json<{
     system: string;
     message: string;

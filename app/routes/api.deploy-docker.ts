@@ -1,9 +1,16 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
+import { requireAuthenticatedUser } from '~/lib/auth/request-user.server';
 
 const logger = createScopedLogger('api.deploy-docker');
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ context, request }: ActionFunctionArgs) {
+  const user = await requireAuthenticatedUser(request, context);
+
+  if (user instanceof Response) {
+    return user;
+  }
+
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
   }
