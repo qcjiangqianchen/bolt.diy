@@ -57,9 +57,12 @@ ENV WRANGLER_SEND_METRICS=false \
 # Note: API keys should be provided at runtime via docker run -e or docker-compose
 # Example: docker run -e OPENAI_API_KEY=your_key_here ...
 
-# Install curl for healthchecks and copy bindings script
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Install runtime tools required by startup scripts
+RUN apt-get update && apt-get install -y --no-install-recommends curl bash \
   && rm -rf /var/lib/apt/lists/*
+
+# Wrangler is required by the dockerstart script at runtime.
+RUN npm install -g wrangler@4.44.0
 
 # Copy built files and scripts
 COPY --from=prod-deps /app/build /app/build
@@ -71,8 +74,8 @@ COPY --from=prod-deps /app/bindings.sh /app/bindings.sh
 RUN mkdir -p /root/.config/.wrangler && \
     echo '{"enabled":false}' > /root/.config/.wrangler/metrics.json
 
-# Make bindings script executable
-RUN chmod +x /app/bindings.sh
+# Normalize line endings and make bindings script executable
+RUN sed -i 's/\r$//' /app/bindings.sh && chmod +x /app/bindings.sh
 
 EXPOSE 5173
 
