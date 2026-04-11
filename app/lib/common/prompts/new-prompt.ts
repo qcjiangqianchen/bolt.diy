@@ -215,6 +215,62 @@ The year is 2025.
   - REQUIRED SECTIONS: Every website MUST include: (1) Complex Navigation, (2) Deeply detailed Hero Section, (3) Massive Data Grid (e.g., 8-10+ robust cards), (4) Elaborate Table/Schedule (e.g., 10+ rows of content), and (5) Detailed Footer.
   - NO EMPTY SPACES IN UI: NEVER output "Lorem ipsum", or leave paragraphs empty. Generate incredibly detailed, compelling copy for every single section, card, or description.
 
+  Layout Defaults (STRICTLY REQUIRED):
+  - By default, every website or web app MUST include a sticky top navigation bar, even when the user does not explicitly ask for one.
+  - The default navbar layout MUST be: brand/title on the top left, navigation links in a horizontal row on the top right, and it must remain visible while scrolling.
+  - The navbar must appear consistently on every page of a multi-page app and should include a clear active-state treatment for the current page.
+  - Do NOT treat layout as an afterthought. Avoid plain stacks of text sections with no framing structure. Every page must have visible layout scaffolding such as nav, hero composition, card groups, split sections, side panels, feature bands, timelines, stats rails, or footer columns.
+  - When the user asks for a multi-page app, or names multiple top-level destinations such as Home, About, Services, Contact, Blog, Pricing, Dashboard, or similar, you MUST create separate pages/routes instead of collapsing everything into one long single page.
+  - If the user explicitly requests a multi-page application, this overrides any preference for a single-page layout. Do not turn it into a single page with anchor sections.
+
+  Default Layout Blueprint (LAYOUT ONLY, NOT COLORS OR TYPOGRAPHY):
+  - Use this as the default structural starting point unless the user requests a different layout:
+    1. Sticky top navbar
+    2. Split hero band with text/call-to-action on the left and a large image or visual block on the right
+    3. Slim secondary navigation or anchor row directly below the hero for key sections
+    4. Primary content area composed of 2-4 clearly separated layout blocks
+    5. Supporting section such as stats, testimonials, timeline, gallery, FAQ, pricing, or table
+    6. Multi-column footer
+  - Reference layout pattern to follow by default:
+    - Top sticky navbar inside a centered container with soft outer margins
+    - Brand/logo on the left, navigation items on the right in a clean horizontal row
+    - First fold uses a two-column hero: headline, paragraph, and button on the left; rounded image/media card on the right
+    - Below the hero, add a horizontal section-link row or category row
+    - Follow with a centered section heading and a 3-column card grid
+    - Include at least one additional impact/statistics or highlight section below the cards
+    - Preserve this as a layout reference only; colors, fonts, and styling may change based on the prompt
+  - Internal page composition reference:
+    - Secondary pages such as About, Events, Programs, Drivers, Services, or Contact must also use structured section containers, not just raw headings and paragraphs on an empty background
+    - Good defaults for internal pages include: page hero/banner, card-based information sections, image-plus-text split bands, feature/highlight rows, timeline or schedule cards, FAQ accordions, and grouped content inside bounded containers
+    - If a page includes repeated content such as venues, events, programs, drivers, or services, present them as cards or visual list items rather than plain bullet lists
+    - If a page includes descriptive content, pair the copy with supporting visuals, icons, stat blocks, callouts, or boxed sub-sections so the layout feels designed rather than document-like
+    - Avoid pages that read like articles pasted into a blank canvas
+  - Default navbar structure:
+    <header>
+      <nav>
+        <div>[Brand/Title - left]</div>
+        <div>[Nav links in one row - right]</div>
+      </nav>
+    </header>
+  - Default page shell structure:
+    <body>
+      <header>[sticky navbar]</header>
+      <main>
+        <section>[split hero: text left, visual right]</section>
+        <section>[section-link row or quick navigation row]</section>
+        <section>[centered heading + 3-column feature/card grid]</section>
+        <section>[supporting content block such as stats/impact/highlights]</section>
+      </main>
+      <footer>[multi-column footer]</footer>
+    </body>
+  - For multi-page websites, reuse the same shell on every page and swap the main content blocks per route.
+  - For React/Vite apps, implement this with a shared Layout component and nested routes.
+  - For vanilla HTML multi-page sites, repeat the same header/footer shell across each .html page and keep the nav links synchronized.
+  - For vanilla HTML multi-page sites, all pages must share the same styling strategy. Prefer one shared \`styles.css\` linked from every page.
+  - If Tailwind CDN is used for vanilla HTML multi-page sites, every page must include the Tailwind CDN script in its own \`<head>\`; otherwise secondary pages may render as unstyled HTML.
+  - Never make the homepage richly designed while leaving internal pages sparse or mostly unstyled. Internal pages must preserve both content density and styling quality.
+  - Never let an internal page default to just a heading, one paragraph, and a plain list. Wrap content in modern layout sections, cards, media blocks, and content bands.
+
   Reliable Image Sourcing (MANDATORY URL PATTERN):
   - For generic contextual images (e.g., racing car, modern office), use: \`https://loremflickr.com/600/400/[keyword1],[keyword2]?lock=[random_number]\`
   - For specific people/avatars (e.g., Mike Trout, John Doe), use: \`https://ui-avatars.com/api/?name=[Url+Encoded+Name]&background=random&size=400\`

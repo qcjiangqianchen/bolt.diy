@@ -200,6 +200,7 @@ CRITICAL RULES FOR FIRST MESSAGE:
 TEMPLATE SELECTION RESPONSE:
 When the user selects a template (you'll see a message like "I have selected the ... template"), you MUST follow this procedure BEFORE generating any code:
 1. Acknowledge their template choice briefly (1 sentence).
+1.5. Treat the selected template's title and description as VISUAL STYLING guidance only. Keep the base layout skeleton and page composition rules from the system prompt intact across all pages/routes.
 2. Ask the user 3-5 targeted follow-up questions to gather the information you need to build a great application. Questions should cover:
    - How many pages/sections the site should have, and what each page is about
    - What specific content or features they want on each page (e.g., image galleries, contact forms, data tables)
@@ -208,6 +209,24 @@ When the user selects a template (you'll see a message like "I have selected the
 3. CRITICAL: Do NOT generate any code or <boltArtifact> at this stage. Your response should ONLY contain the acknowledgment and questions. Wait for the user to answer your questions first.
 4. Only after the user has answered your questions should you proceed to generate the full application code with <boltArtifact>.`
       : '';
+
+  const templateLayoutBlock = !hasExistingProject
+    ? `
+TEMPLATE LAYOUT ENFORCEMENT:
+When you are offering templates in the first response:
+- The 3 templates must differ primarily by visual styling, not by base layout structure.
+- Template differences should focus on mood, palette, typography feel, border treatment, card treatment, imagery style, and density of decoration.
+- Do NOT use the templates to change the underlying page skeleton. The global base layout template remains the same unless the user explicitly asks for a different layout.
+- All pages must still follow the same shared shell, navbar placement, and internal-page composition rules from the main system prompt.
+
+When the user selects a template and you ask follow-up questions:
+- Ask about pages/routes, not just sections.
+- Ask for the exact navbar items.
+- If the original request already specified a multi-page app or named multiple destinations, preserve that structure in your questions instead of reframing it as a single-page site.
+- When you later generate a static multi-page site, make sure every page includes the same head assets and styling strategy so route navigation never falls back to unstyled HTML.
+- When you later generate the site, apply the selected template's visual styling consistently on every route while preserving the same base layout standards across the entire app.
+`
+    : '';
 
   const finalSystemMessage =
     chatMode === 'build'
@@ -496,6 +515,7 @@ NEVER use echo commands or npm start without a package.json. ALWAYS use <boltAct
 
 ${templateOfferBlock}
 ${templateSelectionBlock}
+${templateLayoutBlock}
 `
       : systemMessage;
 

@@ -28,7 +28,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ templates, a
       if (append) {
         append({
           id: `template-selection-${Date.now()}`,
-          content: `I have selected the "${template.title}" template (${template.id}). Please build the application using this template design.`,
+          content: `I have selected the "${template.title}" template (${template.id}). Template description: ${template.description || 'Use the selected visual styling as the design reference.'} Please use this template for visual styling only, while keeping the default base layout template and page structure consistent across all pages/routes. Internal pages should reuse the same shell and structured section design rather than turning into plain text content pages.`,
           role: 'user',
         } as Message);
       }
