@@ -1,5 +1,6 @@
 import type { AppLoadContext } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
+import { getAuthEnv } from './env.server';
 
 const logger = createScopedLogger('auth.email');
 
@@ -12,7 +13,7 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
 }
 
 function getEmailConfig(context: AppLoadContext) {
-  const env = (context.cloudflare?.env as unknown as Record<string, string | undefined> | undefined) ?? {};
+  const env = getAuthEnv(context);
 
   return {
     host: env.BOLT_SMTP_HOST,

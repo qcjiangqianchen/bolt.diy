@@ -1,15 +1,10 @@
 import { createCookieSessionStorage, redirect, type AppLoadContext } from '@remix-run/cloudflare';
 import type { AuthenticatedUser } from './request-user.server';
 import { authenticateUser } from './user-store.server';
+import { getAuthEnv } from './env.server';
 
 const USER_SESSION_KEY = 'authUser';
 const USER_NAMESPACE_COOKIE = 'bolt_user_key';
-
-type EnvMap = Record<string, string | undefined>;
-
-function getEnv(context: AppLoadContext): EnvMap {
-  return (context.cloudflare?.env as unknown as EnvMap | undefined) ?? {};
-}
 
 function parseBooleanFlag(value: string | undefined, defaultValue = false): boolean {
   if (value === undefined) {
@@ -20,12 +15,12 @@ function parseBooleanFlag(value: string | undefined, defaultValue = false): bool
 }
 
 export function isAuthRequired(context: AppLoadContext): boolean {
-  const env = getEnv(context);
+  const env = getAuthEnv(context);
   return parseBooleanFlag(env.BOLT_AUTH_REQUIRED, false);
 }
 
 function getSessionSecret(context: AppLoadContext): string {
-  const env = getEnv(context);
+  const env = getAuthEnv(context);
 
   if (env.BOLT_SESSION_SECRET) {
     return env.BOLT_SESSION_SECRET;
@@ -39,7 +34,7 @@ function getSessionSecret(context: AppLoadContext): string {
 }
 
 function getSessionStorage(context: AppLoadContext) {
-  const env = getEnv(context);
+  const env = getAuthEnv(context);
   const secure = env.NODE_ENV === 'production';
 
   return createCookieSessionStorage({
@@ -60,7 +55,7 @@ function getNamespaceCookieValue(userId: string): string {
 }
 
 function buildNamespaceCookie(context: AppLoadContext, userId: string): string {
-  const env = getEnv(context);
+  const env = getAuthEnv(context);
   const secure = env.NODE_ENV === 'production';
   const secureFlag = secure ? '; Secure' : '';
   const value = getNamespaceCookieValue(userId);
@@ -69,7 +64,7 @@ function buildNamespaceCookie(context: AppLoadContext, userId: string): string {
 }
 
 function buildClearNamespaceCookie(context: AppLoadContext): string {
-  const env = getEnv(context);
+  const env = getAuthEnv(context);
   const secure = env.NODE_ENV === 'production';
   const secureFlag = secure ? '; Secure' : '';
 
@@ -125,7 +120,7 @@ export async function destroyUserSession(request: Request, context: AppLoadConte
 }
 
 export function getConfiguredAdmin(context: AppLoadContext): { email: string; password: string } | null {
-  const env = getEnv(context);
+  const env = getAuthEnv(context);
   const email = env.BOLT_ADMIN_EMAIL?.trim();
   const password = env.BOLT_ADMIN_PASSWORD;
 

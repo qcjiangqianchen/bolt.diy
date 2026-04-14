@@ -27,6 +27,23 @@ import { workbenchStore } from '~/lib/stores/workbench';
 // Our bolt.diy overrides for GrapeJS styling
 import '~/lib/styles/grapesjs-overrides.css';
 
+const BACKGROUND_EDITABLE_TYPES = new Set(['section-container', 'flex-row', 'flex-col']);
+
+const BACKGROUND_COLOR_PRESETS = [
+  { label: 'No background', value: '' },
+  { label: 'White', value: '#ffffff' },
+  { label: 'Slate', value: '#f8fafc' },
+  { label: 'Stone', value: '#f5f5f4' },
+  { label: 'Charcoal', value: '#111827' },
+  { label: 'Graphite', value: '#1f2937' },
+  { label: 'Indigo', value: '#4338ca' },
+  { label: 'Violet', value: '#7c3aed' },
+  { label: 'Rose', value: '#e11d48' },
+  { label: 'Amber', value: '#f59e0b' },
+  { label: 'Emerald', value: '#059669' },
+  { label: 'Sky', value: '#0284c7' },
+];
+
 async function getTailwindConfig(wc: any) {
   const configs = ['tailwind.config.js', 'tailwind.config.ts', 'tailwind.config.cjs', 'tailwind.config.mjs'];
 
@@ -85,6 +102,10 @@ async function detectTailwind(wc: any, html: string, linkedCss: string): Promise
   }
 
   return false;
+}
+
+function isBackgroundEditableComponent(component: any): boolean {
+  return !!component && BACKGROUND_EDITABLE_TYPES.has(component.get?.('type'));
 }
 
 /**
@@ -1556,6 +1577,16 @@ export const VisualEditor = memo(() => {
               'min-height': '120px',
             },
           },
+          init() {
+            const tr = (this as any).get('toolbar') || [];
+
+            const backgroundAction = {
+              attributes: { class: 'i-ph:paint-bucket gjs-toolbar-item', title: 'Background colour' },
+              command: 'bolt:toggle-background-picker',
+            };
+
+            (this as any).set('toolbar', [backgroundAction, ...tr]);
+          },
         },
       });
 
@@ -1602,6 +1633,10 @@ export const VisualEditor = memo(() => {
 
             // Define custom alignment buttons
             const alignActions = [
+              {
+                attributes: { class: 'i-ph:paint-bucket gjs-toolbar-item', title: 'Background colour' },
+                command: 'bolt:toggle-background-picker',
+              },
               {
                 attributes: { class: 'i-ph:align-left gjs-toolbar-item', title: 'Align Left' },
                 command: (ed: any) => {
@@ -1650,6 +1685,10 @@ export const VisualEditor = memo(() => {
 
             // Define custom vertical alignment buttons (for columns)
             const alignActions = [
+              {
+                attributes: { class: 'i-ph:paint-bucket gjs-toolbar-item', title: 'Background colour' },
+                command: 'bolt:toggle-background-picker',
+              },
               {
                 attributes: { class: 'i-ph:align-top gjs-toolbar-item', title: 'Align Top' },
                 command: (ed: any) => {
@@ -1702,6 +1741,162 @@ export const VisualEditor = memo(() => {
           media: block.media,
           attributes: { title: `Drag to add ${block.label}` },
         });
+      });
+
+      const removeBackgroundPicker = (frameDoc?: Document | null) => {
+        const pickerDoc = frameDoc || editor.Canvas.getFrameEl()?.contentDocument;
+        const pickerWindow = pickerDoc?.defaultView as any;
+
+        if (pickerDoc && pickerWindow?._boltBgPickerCloseHandler) {
+          pickerDoc.removeEventListener('pointerdown', pickerWindow._boltBgPickerCloseHandler, true);
+          pickerWindow._boltBgPickerCloseHandler = null;
+        }
+
+        pickerDoc?.getElementById('bolt-bg-picker')?.remove();
+      };
+
+      const clearBackgroundStyle = (component: any) => {
+        if (!component) {
+          return;
+        }
+
+        const nextStyle = { ...(component.getStyle?.() || {}) };
+        delete nextStyle['background-color'];
+        component.setStyle(nextStyle);
+      };
+
+      const showBackgroundPicker = (component: any) => {
+        if (!isBackgroundEditableComponent(component)) {
+          return;
+        }
+
+        const frame = editor.Canvas.getFrameEl();
+        const frameDoc = frame?.contentDocument;
+        const frameWindow = frame?.contentWindow;
+        const el = component.getEl?.();
+
+        if (!frameDoc || !frameWindow || !el) {
+          return;
+        }
+
+        const existingPicker = frameDoc.getElementById('bolt-bg-picker');
+        const targetId = String(component.ccid || component.cid);
+
+        if (existingPicker?.getAttribute('data-target-id') === targetId) {
+          removeBackgroundPicker(frameDoc);
+          return;
+        }
+
+        removeBackgroundPicker(frameDoc);
+
+        const picker = frameDoc.createElement('div');
+        picker.id = 'bolt-bg-picker';
+        picker.className = 'bolt-bg-picker';
+        picker.setAttribute('data-target-id', targetId);
+
+        const currentBackground = component.getStyle?.()['background-color'] || '';
+
+        picker.innerHTML = `
+          <div class="bolt-bg-picker__header">
+            <span>Background colour</span>
+            <button type="button" class="bolt-bg-picker__close" aria-label="Close">&times;</button>
+          </div>
+          <div class="bolt-bg-picker__swatches"></div>
+        `;
+
+        const swatches = picker.querySelector('.bolt-bg-picker__swatches') as HTMLDivElement | null;
+
+        BACKGROUND_COLOR_PRESETS.forEach((preset) => {
+          const button = frameDoc.createElement('button');
+          button.type = 'button';
+          button.className = 'bolt-bg-picker__swatch';
+          button.title = preset.label;
+          button.setAttribute('aria-label', preset.label);
+
+          if (preset.value) {
+            button.style.setProperty('--bolt-bg-swatch', preset.value);
+          } else {
+            button.classList.add('is-empty');
+            button.textContent = 'None';
+          }
+
+          if (preset.value.toLowerCase() === currentBackground.toLowerCase()) {
+            button.classList.add('is-active');
+          }
+
+          button.addEventListener('click', () => {
+            const selected = editor.getSelected();
+
+            if (!selected || !isBackgroundEditableComponent(selected)) {
+              removeBackgroundPicker(frameDoc);
+              return;
+            }
+
+            if (preset.value) {
+              selected.addStyle({ 'background-color': preset.value });
+            } else {
+              clearBackgroundStyle(selected);
+            }
+
+            removeBackgroundPicker(frameDoc);
+          });
+
+          swatches?.appendChild(button);
+        });
+
+        picker.querySelector('.bolt-bg-picker__close')?.addEventListener('click', () => {
+          removeBackgroundPicker(frameDoc);
+        });
+
+        frameDoc.body.appendChild(picker);
+
+        const rect = el.getBoundingClientRect();
+        const pickerRect = picker.getBoundingClientRect();
+        const scrollX = frameWindow.scrollX || frameDoc.documentElement.scrollLeft || 0;
+        const scrollY = frameWindow.scrollY || frameDoc.documentElement.scrollTop || 0;
+        const gap = 12;
+        const top =
+          rect.top + scrollY - pickerRect.height - gap >= scrollY
+            ? rect.top + scrollY - pickerRect.height - gap
+            : rect.bottom + scrollY + gap;
+        const maxLeft = scrollX + frameDoc.documentElement.clientWidth - pickerRect.width - 12;
+        const left = Math.max(scrollX + 12, Math.min(rect.left + scrollX, maxLeft));
+
+        picker.style.left = `${left}px`;
+        picker.style.top = `${top}px`;
+
+        const closeOnPointerDown = (event: PointerEvent) => {
+          const target = event.target as Node | null;
+
+          if (!target) {
+            removeBackgroundPicker(frameDoc);
+            return;
+          }
+
+          const insidePicker = picker.contains(target);
+          const toolbar = (target as Element).closest?.('.gjs-toolbar');
+
+          if (!insidePicker && !toolbar) {
+            removeBackgroundPicker(frameDoc);
+          }
+        };
+
+        (frameWindow as any)._boltBgPickerCloseHandler = closeOnPointerDown;
+        setTimeout(() => {
+          frameDoc.addEventListener('pointerdown', closeOnPointerDown, true);
+        }, 0);
+      };
+
+      editor.Commands.add('bolt:toggle-background-picker', {
+        run(ed: any) {
+          const selected = ed.getSelected();
+
+          if (!isBackgroundEditableComponent(selected)) {
+            return;
+          }
+
+          showBackgroundPicker(selected);
+        },
       });
 
       /*
@@ -1828,6 +2023,9 @@ export const VisualEditor = memo(() => {
       };
 
       editor.on('component:unhover', hideHoverOverlay);
+      editor.on('component:selected', () => removeBackgroundPicker());
+      editor.on('component:deselected', () => removeBackgroundPicker());
+      editor.on('canvas:dragdata', () => removeBackgroundPicker());
 
       // Also hide when the canvas frame loads, and inject editor-only CSS
       editor.on('canvas:frame:load', ({ window: frameWindow }: any) => {
@@ -1895,6 +2093,81 @@ export const VisualEditor = memo(() => {
             [data-gjs-type="section-inner-container"] > * {
               outline: 1px dashed rgba(139,92,246,0.18);
               outline-offset: -1px;
+            }
+
+            .bolt-bg-picker {
+              position: absolute;
+              width: 220px;
+              padding: 12px;
+              background: rgba(15, 23, 42, 0.96);
+              color: #e2e8f0;
+              border: 1px solid rgba(148, 163, 184, 0.2);
+              border-radius: 14px;
+              box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+              backdrop-filter: blur(10px);
+              z-index: 10001;
+            }
+
+            .bolt-bg-picker__header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
+              margin-bottom: 12px;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-size: 13px;
+              font-weight: 600;
+            }
+
+            .bolt-bg-picker__close {
+              border: 0;
+              background: transparent;
+              color: #94a3b8;
+              font-size: 18px;
+              line-height: 1;
+              cursor: pointer;
+              padding: 0;
+            }
+
+            .bolt-bg-picker__swatches {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 10px;
+            }
+
+            .bolt-bg-picker__swatch {
+              position: relative;
+              height: 38px;
+              border: 1px solid rgba(148, 163, 184, 0.24);
+              border-radius: 10px;
+              background: var(--bolt-bg-swatch, transparent);
+              cursor: pointer;
+              transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+
+            .bolt-bg-picker__swatch:hover {
+              transform: translateY(-1px);
+              border-color: rgba(196, 181, 253, 0.8);
+              box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+            }
+
+            .bolt-bg-picker__swatch.is-active {
+              border-color: rgba(196, 181, 253, 0.95);
+              box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.24);
+            }
+
+            .bolt-bg-picker__swatch.is-empty {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background:
+                linear-gradient(135deg, transparent 45%, rgba(248, 113, 113, 0.95) 46%, rgba(248, 113, 113, 0.95) 54%, transparent 55%),
+                rgba(255, 255, 255, 0.02);
+              color: #e2e8f0;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: 0.02em;
             }
           `;
           frameDoc.head.appendChild(style);

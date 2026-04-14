@@ -1,6 +1,7 @@
 import type { AppLoadContext } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
 import { generateSixDigitCode, hashPassword, verifyPassword } from './password.server';
+import { getAuthEnv } from './env.server';
 
 const logger = createScopedLogger('auth.user-store');
 
@@ -34,7 +35,7 @@ function isFuture(dateValue?: string): boolean {
 }
 
 function getUsersFilePath(context: AppLoadContext): string {
-  const env = context.cloudflare?.env as unknown as Record<string, string | undefined> | undefined;
+  const env = getAuthEnv(context);
   return env?.BOLT_AUTH_USER_STORE_FILE || '.bolt-auth-users.json';
 }
 
@@ -55,6 +56,9 @@ async function writeUsersToDisk(context: AppLoadContext, users: UserMap): Promis
   try {
     const fs = await import('node:fs/promises');
     const filePath = getUsersFilePath(context);
+    const path = await import('node:path');
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, JSON.stringify(users, null, 2), 'utf8');
   } catch (error) {
     logger.warn('Falling back to in-memory auth store; disk persistence unavailable', error);

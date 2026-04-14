@@ -4,8 +4,19 @@ import { requireAuthenticatedUser } from '~/lib/auth/request-user.server';
 
 const logger = createScopedLogger('api.deploy-docker');
 
+function getRuntimeEnv(context: ActionFunctionArgs['context']): Record<string, string | undefined> {
+  const cloudflareEnv = (context.cloudflare?.env as unknown as Record<string, string | undefined> | undefined) ?? {};
+  const processEnv = typeof process !== 'undefined' ? process.env : {};
+
+  return {
+    ...processEnv,
+    ...cloudflareEnv,
+  };
+}
+
 export async function action({ context, request }: ActionFunctionArgs) {
   const user = await requireAuthenticatedUser(request, context);
+  const runtimeEnv = getRuntimeEnv(context);
 
   if (user instanceof Response) {
     return user;
@@ -40,7 +51,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const flyRegion = body.flyRegion || 'iad';
       const boltUrl = body.boltUrl;
 
-      return handleFlyDeploy(imageName, files, flyAppName, flyRegion, boltUrl);
+      return handleFlyDeploy(imageName, files, flyAppName, flyRegion, boltUrl, runtimeEnv);
     }
 
     return json({ error: 'Invalid action. Use "package", "build", or "fly-deploy".' }, { status: 400 });
@@ -331,20 +342,60 @@ async function handleFlyDeploy(
   flyAppName: string,
   flyRegion: string,
   boltUrl?: string,
+  runtimeEnv: Record<string, string | undefined> = {},
 ): Promise<Response> {
   try {
     const { writeFile, mkdir, rm } = await import('node:fs/promises');
     const { join, dirname } = await import('node:path');
-    const { spawn, execSync } = await import('node:child_process');
+    const { spawn, execFileSync } = await import('node:child_process');
+    const { existsSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
+    const flyApiToken = runtimeEnv.FLY_API_TOKEN?.trim();
+    const flyOrg = runtimeEnv.FLY_ORG?.trim() || 'personal';
+    const childEnv = {
+      ...process.env,
+      ...runtimeEnv,
+    };
+    const candidateFlyctlPaths = [
+      runtimeEnv.FLYCTL_PATH?.trim(),
+      process.env.FLYCTL_PATH?.trim(),
+      '/usr/local/bin/flyctl',
+      '/root/.fly/bin/flyctl',
+      'flyctl',
+    ].filter((value): value is string => Boolean(value));
+    const flyctlPath = candidateFlyctlPaths.find((candidate) => candidate === 'flyctl' || existsSync(candidate));
 
-    // Verify flyctl is available
-    try {
-      execSync('flyctl version', { stdio: 'pipe' });
-    } catch {
+    if (!flyctlPath) {
       return new Response(
         JSON.stringify({
-          error: 'flyctl is not installed or not in PATH. Install it from https://fly.io/docs/flyctl/install/',
+          error:
+            'flyctl could not be located in the runtime. Set FLYCTL_PATH=/usr/local/bin/flyctl or ensure PATH includes /usr/local/bin.',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Verify flyctl is available, but preserve the real execution error for debugging.
+    try {
+      execFileSync(flyctlPath, ['version'], { stdio: 'pipe', env: childEnv });
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+
+      logger.error(`flyctl preflight failed for "${flyctlPath}"`, error);
+
+      return new Response(
+        JSON.stringify({
+          error: `flyctl preflight failed at ${flyctlPath}: ${details}`,
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (!flyApiToken) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'FLY_API_TOKEN is not configured in the server runtime. Set FLY_API_TOKEN in .env or .env.local and restart the app.',
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } },
       );
@@ -426,10 +477,10 @@ async function handleFlyDeploy(
           log(`       Detected internal port: ${port}\n`);
 
           await new Promise<void>((resolve) => {
-            const createApp = spawn('flyctl', ['apps', 'create', flyAppName, '--org', 'personal', '-y'], {
+            const createApp = spawn(flyctlPath!, ['apps', 'create', flyAppName, '--org', flyOrg, '-y'], {
               cwd: buildDir,
               stdio: ['ignore', 'pipe', 'pipe'],
-              shell: true,
+              env: childEnv,
             });
 
             createApp.stdout.on('data', (data: Buffer) => log(data.toString()));
@@ -455,12 +506,12 @@ async function handleFlyDeploy(
 
           await new Promise<void>((resolve, reject) => {
             const deploy = spawn(
-              'flyctl',
+              flyctlPath!,
               ['deploy', '.', '--app', flyAppName, '--primary-region', flyRegion, '--remote-only', '--ha=false', '-y'],
               {
                 cwd: buildDir,
                 stdio: ['ignore', 'pipe', 'pipe'],
-                shell: true,
+                env: childEnv,
               },
             );
 

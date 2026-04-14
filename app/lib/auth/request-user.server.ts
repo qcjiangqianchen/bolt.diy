@@ -1,5 +1,6 @@
 import type { AppLoadContext } from '@remix-run/cloudflare';
 import { getSessionUser } from './session.server';
+import { getAuthEnv } from './env.server';
 
 export interface AuthenticatedUser {
   id: string;
@@ -21,7 +22,7 @@ function parseBooleanFlag(value: string | undefined, defaultValue = false): bool
 }
 
 function getAuthConfig(context: AppLoadContext): AuthConfig {
-  const env = context.cloudflare?.env as unknown as Record<string, string | undefined> | undefined;
+  const env = getAuthEnv(context);
 
   return {
     required: parseBooleanFlag(env?.BOLT_AUTH_REQUIRED, false),
