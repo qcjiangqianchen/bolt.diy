@@ -164,6 +164,7 @@ export async function streamText(props: {
   const isFirstMessage = processedMessages.length <= 1;
   const isEarlyConversation = processedMessages.length <= 3;
   const hasExistingProject = contextFiles && Object.keys(contextFiles).length > 0;
+  const currentDateIso = new Date().toISOString().slice(0, 10);
 
   // Block 1: Only shown on the very first message — instructs LLM to offer 3 templates
   const templateOfferBlock =
@@ -198,16 +199,14 @@ CRITICAL RULES FOR FIRST MESSAGE:
     isEarlyConversation && !hasExistingProject
       ? `
 TEMPLATE SELECTION RESPONSE:
-When the user selects a template (you'll see a message like "I have selected the ... template"), you MUST follow this procedure BEFORE generating any code:
+When the user selects a template (you'll see a message like "I have selected the ... template"), you MUST follow this procedure:
 1. Acknowledge their template choice briefly (1 sentence).
 1.5. Treat the selected template's title and description as VISUAL STYLING guidance only. Keep the base layout skeleton and page composition rules from the system prompt intact across all pages/routes.
-2. Ask the user 3-5 targeted follow-up questions to gather the information you need to build a great application. Questions should cover:
-   - How many pages/sections the site should have, and what each page is about
-   - What specific content or features they want on each page (e.g., image galleries, contact forms, data tables)
-   - Any branding/style preferences beyond the template (colors, fonts, logos)
-   - Any data or functionality requirements (e.g., "list the latest 3 tennis tournaments")
-3. CRITICAL: Do NOT generate any code or <boltArtifact> at this stage. Your response should ONLY contain the acknowledgment and questions. Wait for the user to answer your questions first.
-4. Only after the user has answered your questions should you proceed to generate the full application code with <boltArtifact>.`
+2. If the user's request already specifies pages, content, data, or design direction, DO NOT ask follow-up questions. Infer reasonable defaults and generate the application immediately.
+2.5. If the original request includes "subsequent pages", "multiple pages", "separate pages", or named destinations, preserve that as a multi-page requirement and generate real routes/files immediately.
+3. Only ask a SINGLE concise clarification question if a missing detail would materially block implementation.
+4. For standard brochure, dashboard, sports, portfolio, or informational websites, default to immediate generation rather than a Q&A round.
+5. If the user has answered prior questions with short responses like "no", "none", or "use defaults", treat that as permission to proceed immediately with strong defaults and no more questions.`
       : '';
 
   const templateLayoutBlock = !hasExistingProject
@@ -223,6 +222,7 @@ When the user selects a template and you ask follow-up questions:
 - Ask about pages/routes, not just sections.
 - Ask for the exact navbar items.
 - If the original request already specified a multi-page app or named multiple destinations, preserve that structure in your questions instead of reframing it as a single-page site.
+- If the original request says "landing page" plus "subsequent pages", treat the landing page as \`index.html\` and the subsequent topics as separate route files/components.
 - When you later generate a static multi-page site, make sure every page includes the same head assets and styling strategy so route navigation never falls back to unstyled HTML.
 - When you later generate the site, apply the selected template's visual styling consistently on every route while preserving the same base layout standards across the entire app.
 `
@@ -231,6 +231,9 @@ When the user selects a template and you ask follow-up questions:
   const finalSystemMessage =
     chatMode === 'build'
       ? `${systemMessage}
+
+CURRENT DATE CONTEXT:
+Today's date is ${currentDateIso}. For time-sensitive or current-topic websites, use the user's requested year, season, or date when provided. If the user does not provide one, label content relative to this date and use stable recognized facts when confident. If exact live details may be uncertain, keep the requested structure and mark uncertain slots as "TBD" or "to be confirmed" instead of omitting them.
 
 RESPONSE FORMAT:
 (CRITICAL: If you are in the FIRST MESSAGE BEHAVIOR or TEMPLATE SELECTION RESPONSE phase described at the bottom of this prompt, follow those instructions instead and DISREGARD the artifact/code generation rules below until the questions are answered.)
@@ -257,6 +260,9 @@ FOR STATIC HTML PROJECTS (no framework, just HTML/CSS/JS):
 - Make sure package.json is the FIRST file you create.
 - Use npm run start as the start command
 - YOU MUST run <boltAction type="shell">npm install</boltAction> AFTER creating package.json and BEFORE the start action.
+- If the user requested multiple pages, create one real \`.html\` file for each requested top-level page. Do not satisfy page requests with only \`index.html\` plus anchor links.
+- If the user requested a landing page plus subsequent pages, use \`index.html\` for the landing page and create separate files for the subsequent topics, such as \`races.html\` and \`drivers.html\`.
+- Every generated HTML page must include its own complete \`<head>\`, the shared styling assets, the shared navigation shell, and substantive designed main content.
 - Example for a static site:
 
 I'll set up a premium, dark-themed static website for you.
@@ -348,6 +354,7 @@ FOR REACT/VITE PROJECTS:
 - Create package.json with dependencies and dev script
 - ALWAYS run <boltAction type="shell">npm install</boltAction> BEFORE the start action
 - Then start with <boltAction type="start">npm run dev</boltAction>
+- If the user requested multiple pages, install and wire \`react-router-dom\`, create a route component for each requested top-level page, and use real routes instead of only conditionally scrolling sections.
 - Example for a React app:
 
 I'll create a premium React application for you.
@@ -512,6 +519,18 @@ export default function App() {
 Your React app is now running! The dev server is started and you should see it in the preview. You can customize the components in the src/ folder.
 
 NEVER use echo commands or npm start without a package.json. ALWAYS use <boltAction type="start"> (not type="shell") for starting servers. ALWAYS run npm install before starting if there are dependencies.
+
+WEBSITE HARD RULES:
+- For website and web app requests, do NOT output sparse article-style pages with a title and a few paragraphs only.
+- The main content area must absorb leftover height using designed sections such as hero panels, stat strips, card grids, schedule tables, media bands, or spotlight sections. Never make the footer tall to fill space.
+- The default footer must remain compact by default, approximately navbar-height unless extra footer content is intentionally added.
+- If the user asks for pages like Home, About, Drivers, Races, Teams, Schedule, or similar, each page must contain multiple designed sections and visible layout structure.
+- If the user says "subsequent pages", "multiple pages", "separate pages", "pages for", or "landing page plus", create real routes/files for those pages. A single \`index.html\` with sections or \`#anchors\` is a failure.
+- Navigation labels are a route contract: every top-level nav destination must point to a real generated page/route unless the user explicitly requested a single-page anchor layout.
+- If the user asks for drivers, races, standings, schedules, products, services, locations, or people, present them using cards, tiles, tables, schedules, or visual information panels rather than plain paragraphs.
+- If the user requests a count such as "top 10 drivers" or "all 20 drivers", output that full count. Fewer items is a failure.
+- If the user says they do not want buttons, omit buttons and strengthen the layout with cards, stats, imagery, bands, and structured sections instead.
+- For sports or automotive subjects, prefer a dashboard/editorial layout with a bold hero, stats rail, featured event block, and dense card or table sections.
 
 ${templateOfferBlock}
 ${templateSelectionBlock}
