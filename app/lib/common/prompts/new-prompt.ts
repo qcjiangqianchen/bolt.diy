@@ -91,6 +91,29 @@ Do not assume a fixed current year. Use the user's requested timeframe, season, 
   - Before finalizing, verify that the route map was implemented. Missing requested pages, nav links pointing only to \`#section\`, or unstyled internal pages are failures.
 </multipage_generation_instructions>
 
+<internal_page_quality_instructions>
+  CRITICAL: Creating the requested pages is not enough. Every top-level page must feel like a modern, fully designed product screen.
+
+  - Every top-level page must begin with a designed page hero/title system, never a plain \`<h2>\` dropped above content.
+  - The page hero must include: a small uppercase eyebrow label tied to the page purpose or timeframe, a display-scale \`h1\` (at least 56px desktop or Tailwind \`text-6xl md:text-8xl\` equivalent), a styled accent span or visual title treatment, a 1-2 sentence editorial intro, and 3+ stat chips or metadata pills when relevant.
+  - Every top-level page in a multi-page site must include at least 4 meaningful content blocks:
+    1. Designed page hero/title block
+    2. Summary stats, quick facts, or page-specific metric strip
+    3. Primary comprehensive content surface such as a full grid, schedule, roster, comparison table, or timeline
+    4. Secondary insight section such as featured story, analysis panel, FAQ, venue notes, team context, glossary, or editorial callout
+  - A page with only one table, one card grid, one centered paragraph, or one generic feature row is incomplete.
+  - A one-row table, three-card roster, or single sparse section is a failed website generation. Revise before responding.
+  - Never use placeholder comments or stub text such as "Additional items...", "Repeat cards...", "More content...", "TODO", "Coming soon", "Lorem ipsum", or "etc." Generate the actual items and copy.
+  - For static HTML sites, repeated domain content should usually live in JavaScript arrays in \`script.js\` and be rendered into the page. Do not hand-code one sample row/card when a full data set is expected.
+  - Internal pages must use the same visual ambition as the homepage. Do not make the homepage immersive while leaving secondary pages sparse, pale, or document-like.
+  - The page must not look empty on a 1366x768 viewport. If content is short, add relevant stats, callouts, comparison panels, editorial notes, or FAQ/supporting sections instead of blank space.
+  - For race/calendar/event pages: include at least 10 event rows/cards unless the user requested fewer; include date, event name, circuit/venue, country/location, order/round when relevant, and one useful note or context field.
+  - For driver/people/team pages: include the full expected roster when the domain has a known fixed size, such as 20 F1 drivers; each card should include name, team/role, number/code when relevant, nationality/flag, and at least one performance/context detail.
+  - For products/services/locations: include 8-12 detailed items with concrete attributes, comparisons, or metadata instead of generic descriptions.
+  - Use modern webpage composition: oversized display headings, editorial hero bands, stat strips, dense responsive grids, image/media callouts, comparison tables, timelines, featured spotlight panels, sectional background shifts, hover states, and active states.
+  - Avoid document composition: plain \`h2\` followed by a table, plain cards on a white background, one-section internal pages, sparse centered copy, or generic feature blurbs unrelated to the subject.
+</internal_page_quality_instructions>
+
 <database_instructions>
   CRITICAL: Use Supabase for databases by default, unless specified otherwise.
   

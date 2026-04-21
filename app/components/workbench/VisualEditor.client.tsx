@@ -592,8 +592,23 @@ const BLOCKS = [
     id: 'link',
     label: 'Link',
     category: 'Text',
-    content:
-      '<a href="https://example.com" target="_self" style="color:#7c3aed;text-decoration:underline;font-weight:500;font-size:1rem;">Link text</a>',
+    content: {
+      type: 'link',
+      content: 'Link text',
+      attributes: {
+        href: 'https://example.com',
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        'data-bolt-link-prompt': 'true',
+      },
+      style: {
+        color: '#7c3aed',
+        'text-decoration': 'underline',
+        'font-weight': '500',
+        'font-size': '1rem',
+        cursor: 'pointer',
+      },
+    },
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
   },
   {
@@ -1557,6 +1572,182 @@ export const VisualEditor = memo(() => {
         },
       });
 
+      const normalizeExternalUrl = (value: string) => {
+        const trimmed = value.trim();
+
+        if (!trimmed) {
+          return '';
+        }
+
+        if (/^(https?:)?\/\//i.test(trimmed) || /^(mailto|tel):/i.test(trimmed) || trimmed.startsWith('#')) {
+          return trimmed;
+        }
+
+        return `https://${trimmed}`;
+      };
+
+      const escapeHtml = (value: string) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+
+      const isLinkComponent = (component: any) => {
+        if (!component) {
+          return false;
+        }
+
+        return (
+          component.is?.('link') ||
+          component.get?.('type') === 'link' ||
+          component.get?.('tagName') === 'a' ||
+          component.getEl?.()?.tagName?.toLowerCase() === 'a'
+        );
+      };
+
+      const openLinkEditor = (component: any) => {
+        if (!isLinkComponent(component)) {
+          return;
+        }
+
+        const attrs = component.getAttributes?.() || {};
+        const currentHref = attrs.href || '';
+        const currentText = component.getEl?.()?.textContent || 'Link text';
+        const modal = editor.Modal;
+        const content = document.createElement('div');
+
+        content.style.cssText = `
+          width: min(520px, 86vw);
+          padding: 18px;
+          background: #3f3f3f;
+          color: #f8fafc;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        `;
+
+        content.innerHTML = `
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px;">Link text</label>
+          <input data-bolt-link-text type="text" value="${escapeHtml(currentText)}" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:12px 14px;border:0;background:#2f2f2f;color:#f8fafc;border-radius:4px;font-size:14px;" />
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px;">External URL</label>
+          <input data-bolt-link-url type="url" value="${escapeHtml(currentHref)}" placeholder="https://example.com" style="width:100%;box-sizing:border-box;margin-bottom:16px;padding:12px 14px;border:0;background:#2f2f2f;color:#f8fafc;border-radius:4px;font-size:14px;" />
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#d1d5db;margin-bottom:20px;">
+            <input data-bolt-link-new-tab type="checkbox" ${attrs.target === '_blank' ? 'checked' : ''} />
+            Open in a new tab
+          </label>
+          <div style="display:flex;justify-content:flex-end;gap:10px;">
+            <button data-bolt-link-cancel type="button" style="border:0;background:#525252;color:#f8fafc;padding:10px 14px;border-radius:4px;cursor:pointer;">Cancel</button>
+            <button data-bolt-link-save type="button" style="border:0;background:#7c3aed;color:white;padding:10px 16px;border-radius:4px;font-weight:700;cursor:pointer;">Apply link</button>
+          </div>
+        `;
+
+        const urlInput = content.querySelector<HTMLInputElement>('[data-bolt-link-url]');
+        const textInput = content.querySelector<HTMLInputElement>('[data-bolt-link-text]');
+        const newTabInput = content.querySelector<HTMLInputElement>('[data-bolt-link-new-tab]');
+        const closeModal = () => {
+          const nextAttrs = { ...(component.getAttributes?.() || {}) };
+          delete nextAttrs['data-bolt-link-prompt'];
+          component.setAttributes(nextAttrs);
+          modal.close();
+        };
+
+        content.querySelector('[data-bolt-link-cancel]')?.addEventListener('click', closeModal);
+        content.querySelector('[data-bolt-link-save]')?.addEventListener('click', () => {
+          const href = normalizeExternalUrl(urlInput?.value || '');
+          const text = (textInput?.value || '').trim() || 'Link text';
+          const nextAttrs = { ...(component.getAttributes?.() || {}) };
+
+          delete nextAttrs['data-bolt-link-prompt'];
+          nextAttrs.href = href || '#';
+
+          if (newTabInput?.checked) {
+            nextAttrs.target = '_blank';
+            nextAttrs.rel = 'noopener noreferrer';
+          } else {
+            delete nextAttrs.target;
+            delete nextAttrs.rel;
+          }
+
+          component.setAttributes(nextAttrs);
+          component.components(escapeHtml(text));
+          modal.close();
+        });
+
+        modal.setTitle('Edit link');
+        modal.setContent(content);
+        modal.open();
+        setTimeout(() => urlInput?.focus(), 0);
+      };
+
+      editor.Commands.add('bolt:edit-link', {
+        run(ed: any, _sender: any, options: { component?: any } = {}) {
+          const component = options.component || ed.getSelected();
+
+          if (isLinkComponent(component)) {
+            openLinkEditor(component);
+          }
+        },
+      });
+
+      editor.Components.addType('link', {
+        model: {
+          defaults: {
+            resizable: resizableConfig,
+          },
+          init() {
+            const tr = (this as any).get('toolbar') || [];
+            const hasEditLinkAction = tr.some((item: any) => item?.command === 'bolt:edit-link');
+
+            if (!hasEditLinkAction) {
+              (this as any).set('toolbar', [
+                {
+                  attributes: { class: 'i-ph:link gjs-toolbar-item', title: 'Edit link' },
+                  command: 'bolt:edit-link',
+                },
+                ...tr,
+              ]);
+            }
+          },
+        },
+        view: {
+          events: {
+            click: 'openLinkEditor',
+          },
+          openLinkEditor(ev: Event) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            editor.runCommand('bolt:edit-link', { component: (this as any).model });
+          },
+        },
+      });
+
+      const pendingLinkEditorComponents = new WeakSet<object>();
+      const promptForLinkUrl = (component: any) => {
+        const attrs = component?.getAttributes?.() || {};
+
+        if (!isLinkComponent(component) || attrs['data-bolt-link-prompt'] !== 'true') {
+          return;
+        }
+
+        if (pendingLinkEditorComponents.has(component)) {
+          return;
+        }
+
+        pendingLinkEditorComponents.add(component);
+        setTimeout(() => {
+          pendingLinkEditorComponents.delete(component);
+
+          const latestAttrs = component?.getAttributes?.() || {};
+
+          if (!isLinkComponent(component) || latestAttrs['data-bolt-link-prompt'] !== 'true') {
+            return;
+          }
+
+          editor.select(component);
+          editor.runCommand('bolt:edit-link', { component });
+        }, 0);
+      };
+
       // 1. SECTION: Full-width container with centred inner container (like GrapeJS)
       editor.Components.addType('section-container', {
         model: {
@@ -2024,6 +2215,9 @@ export const VisualEditor = memo(() => {
 
       editor.on('component:unhover', hideHoverOverlay);
       editor.on('component:selected', () => removeBackgroundPicker());
+      editor.on('component:selected', (component: any) => {
+        promptForLinkUrl(component);
+      });
       editor.on('component:deselected', () => removeBackgroundPicker());
       editor.on('canvas:dragdata', () => removeBackgroundPicker());
 
@@ -2194,6 +2388,8 @@ export const VisualEditor = memo(() => {
         if (type === 'wrapper' || type === 'textnode') {
           return;
         }
+
+        promptForLinkUrl(component);
 
         // SECTIONS/LAYOUT: no dmode, no resize → always snap-to-edge
         if (LAYOUT_TYPES.includes(type)) {
