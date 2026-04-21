@@ -1,4 +1,27 @@
 services:
+  db:
+    image: postgres:17-alpine
+    container_name: bolt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bolt_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bolt_local_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-bolt_core}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bolt_app} -d ${POSTGRES_DB:-bolt_core}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - development
+      - production
+      - default
+
   app-prod:
     image: bolt-ai:production
     build:
@@ -89,3 +112,4 @@ services:
 
 volumes:
   auth-data:
+  postgres-data:
