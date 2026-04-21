@@ -305,8 +305,6 @@ ${value.content}
         }
       }
 
-      takeSnapshot(messages[messages.length - 1].id, workbenchStore.files.get(), _urlId, chatSummary);
-
       if (!description.get() && firstArtifact?.title) {
         description.set(firstArtifact?.title);
       }
@@ -336,11 +334,13 @@ ${value.content}
         db,
         finalChatId, // Use the potentially updated chatId
         [...archivedMessages, ...messages],
-        urlId,
+        _urlId,
         description.get(),
         undefined,
         chatMetadata.get(),
       );
+
+      await takeSnapshot(messages[messages.length - 1].id, workbenchStore.files.get(), _urlId, chatSummary);
     },
     duplicateCurrentChat: async (listItemId: string) => {
       if (!db || (!mixedId && !listItemId)) {
