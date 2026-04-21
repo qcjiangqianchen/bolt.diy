@@ -12,6 +12,20 @@ export interface IChatMetadata {
 }
 
 const logger = createScopedLogger('ChatHistory');
+const REMOTE_PERSISTENCE_API = '/api/persistence';
+const REMOTE_SYNC_VERSION = 'core-postgres-v1';
+
+interface RemotePersistenceResponse<T> {
+  error?: string;
+  enabled?: boolean;
+  ok?: boolean;
+  chat?: ChatHistoryItem | null;
+  chats?: ChatHistoryItem[];
+  id?: string;
+  urlId?: string;
+  snapshot?: Snapshot | null;
+  data?: T;
+}
 
 function getUserScopedDatabaseName(): string {
   if (typeof document === 'undefined') {
@@ -77,7 +91,112 @@ export async function openDatabase(): Promise<IDBDatabase | undefined> {
   });
 }
 
-export async function getAll(db: IDBDatabase): Promise<ChatHistoryItem[]> {
+async function remotePersistenceRequest<T>(
+  operation: string,
+  payload: Record<string, unknown> = {},
+): Promise<RemotePersistenceResponse<T> | undefined> {
+  try {
+    const response = await fetch(REMOTE_PERSISTENCE_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operation,
+        ...payload,
+      }),
+    });
+
+    if (response.status === 401 || response.status === 404) {
+      return undefined;
+    }
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || `Remote persistence failed: ${response.status}`);
+    }
+
+    return (await response.json()) as RemotePersistenceResponse<T>;
+  } catch (error) {
+    logger.debug('Remote persistence request unavailable', { operation, error });
+    return undefined;
+  }
+}
+
+async function isRemotePersistenceAvailable(): Promise<boolean> {
+  const response = await remotePersistenceRequest('status');
+  return Boolean(response?.enabled);
+}
+
+async function getSnapshotsForSync(db: IDBDatabase): Promise<Record<string, Snapshot | undefined>> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('snapshots', 'readonly');
+    const store = transaction.objectStore('snapshots');
+    const request = store.openCursor();
+    const snapshots: Record<string, Snapshot | undefined> = {};
+
+    request.onsuccess = (event: Event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+
+      if (!cursor) {
+        resolve(snapshots);
+        return;
+      }
+
+      snapshots[cursor.value.chatId] = cursor.value.snapshot as Snapshot | undefined;
+      cursor.continue();
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function syncLocalToRemote(db: IDBDatabase): Promise<void> {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  const syncKey = `bolt-remote-sync:${db.name}`;
+
+  if (localStorage.getItem(syncKey) === REMOTE_SYNC_VERSION) {
+    return;
+  }
+
+  if (!(await isRemotePersistenceAvailable())) {
+    return;
+  }
+
+  const [chats, snapshots] = await Promise.all([getAllLocal(db), getSnapshotsForSync(db)]);
+
+  if (chats.length === 0) {
+    localStorage.setItem(syncKey, REMOTE_SYNC_VERSION);
+    return;
+  }
+
+  const response = await remotePersistenceRequest('sync', { chats, snapshots });
+
+  if (response?.ok) {
+    localStorage.setItem(syncKey, REMOTE_SYNC_VERSION);
+  }
+}
+
+async function withRemoteFallback<T>(
+  db: IDBDatabase,
+  remoteOperation: () => Promise<T | undefined>,
+  localOperation: () => Promise<T>,
+): Promise<T> {
+  await syncLocalToRemote(db);
+
+  const remoteResult = await remoteOperation();
+
+  if (remoteResult !== undefined) {
+    return remoteResult;
+  }
+
+  return localOperation();
+}
+
+async function getAllLocal(db: IDBDatabase): Promise<ChatHistoryItem[]> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('chats', 'readonly');
     const store = transaction.objectStore('chats');
@@ -88,7 +207,18 @@ export async function getAll(db: IDBDatabase): Promise<ChatHistoryItem[]> {
   });
 }
 
-export async function setMessages(
+export async function getAll(db: IDBDatabase): Promise<ChatHistoryItem[]> {
+  return withRemoteFallback(
+    db,
+    async () => {
+      const response = await remotePersistenceRequest('getAll');
+      return response?.chats;
+    },
+    () => getAllLocal(db),
+  );
+}
+
+async function setMessagesLocal(
   db: IDBDatabase,
   id: string,
   messages: Message[],
@@ -120,11 +250,40 @@ export async function setMessages(
   });
 }
 
-export async function getMessages(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
-  return (await getMessagesById(db, id)) || (await getMessagesByUrlId(db, id));
+export async function setMessages(
+  db: IDBDatabase,
+  id: string,
+  messages: Message[],
+  urlId?: string,
+  description?: string,
+  timestamp?: string,
+  metadata?: IChatMetadata,
+): Promise<void> {
+  await setMessagesLocal(db, id, messages, urlId, description, timestamp, metadata);
+  await syncLocalToRemote(db);
+
+  await remotePersistenceRequest('setMessages', {
+    id,
+    messages,
+    urlId,
+    description,
+    timestamp,
+    metadata,
+  });
 }
 
-export async function getMessagesByUrlId(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
+export async function getMessages(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
+  return withRemoteFallback(
+    db,
+    async () => {
+      const response = await remotePersistenceRequest('getMessages', { id });
+      return response?.chat || undefined;
+    },
+    async () => (await getMessagesById(db, id)) || (await getMessagesByUrlId(db, id)),
+  );
+}
+
+async function getMessagesByUrlIdLocal(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('chats', 'readonly');
     const store = transaction.objectStore('chats');
@@ -136,7 +295,11 @@ export async function getMessagesByUrlId(db: IDBDatabase, id: string): Promise<C
   });
 }
 
-export async function getMessagesById(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
+export async function getMessagesByUrlId(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
+  return getMessagesByUrlIdLocal(db, id);
+}
+
+async function getMessagesByIdLocal(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('chats', 'readonly');
     const store = transaction.objectStore('chats');
@@ -147,7 +310,11 @@ export async function getMessagesById(db: IDBDatabase, id: string): Promise<Chat
   });
 }
 
-export async function deleteById(db: IDBDatabase, id: string): Promise<void> {
+export async function getMessagesById(db: IDBDatabase, id: string): Promise<ChatHistoryItem> {
+  return getMessagesByIdLocal(db, id);
+}
+
+async function deleteByIdLocal(db: IDBDatabase, id: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['chats', 'snapshots'], 'readwrite'); // Add snapshots store to transaction
     const chatStore = transaction.objectStore('chats');
@@ -192,7 +359,13 @@ export async function deleteById(db: IDBDatabase, id: string): Promise<void> {
   });
 }
 
-export async function getNextId(db: IDBDatabase): Promise<string> {
+export async function deleteById(db: IDBDatabase, id: string): Promise<void> {
+  await syncLocalToRemote(db);
+  await remotePersistenceRequest('deleteById', { id });
+  await deleteByIdLocal(db, id);
+}
+
+async function getNextIdLocal(db: IDBDatabase): Promise<string> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('chats', 'readonly');
     const store = transaction.objectStore('chats');
@@ -207,7 +380,26 @@ export async function getNextId(db: IDBDatabase): Promise<string> {
   });
 }
 
+export async function getNextId(db: IDBDatabase): Promise<string> {
+  return withRemoteFallback(
+    db,
+    async () => {
+      const response = await remotePersistenceRequest('getNextId');
+      return response?.id;
+    },
+    () => getNextIdLocal(db),
+  );
+}
+
 export async function getUrlId(db: IDBDatabase, id: string): Promise<string> {
+  await syncLocalToRemote(db);
+
+  const remoteResponse = await remotePersistenceRequest('getUrlId', { id });
+
+  if (remoteResponse?.urlId) {
+    return remoteResponse.urlId;
+  }
+
   const idList = await getUrlIds(db);
 
   if (!idList.includes(id)) {
@@ -311,7 +503,9 @@ export async function updateChatDescription(db: IDBDatabase, id: string, descrip
     throw new Error('Description cannot be empty');
   }
 
-  await setMessages(db, id, chat.messages, chat.urlId, description, chat.timestamp, chat.metadata);
+  await setMessagesLocal(db, id, chat.messages, chat.urlId, description, chat.timestamp, chat.metadata);
+  await syncLocalToRemote(db);
+  await remotePersistenceRequest('updateChatDescription', { id, description });
 }
 
 export async function updateChatMetadata(
@@ -325,10 +519,12 @@ export async function updateChatMetadata(
     throw new Error('Chat not found');
   }
 
-  await setMessages(db, id, chat.messages, chat.urlId, chat.description, chat.timestamp, metadata);
+  await setMessagesLocal(db, id, chat.messages, chat.urlId, chat.description, chat.timestamp, metadata);
+  await syncLocalToRemote(db);
+  await remotePersistenceRequest('updateChatMetadata', { id, metadata });
 }
 
-export async function getSnapshot(db: IDBDatabase, chatId: string): Promise<Snapshot | undefined> {
+async function getSnapshotLocal(db: IDBDatabase, chatId: string): Promise<Snapshot | undefined> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('snapshots', 'readonly');
     const store = transaction.objectStore('snapshots');
@@ -339,7 +535,18 @@ export async function getSnapshot(db: IDBDatabase, chatId: string): Promise<Snap
   });
 }
 
-export async function setSnapshot(db: IDBDatabase, chatId: string, snapshot: Snapshot): Promise<void> {
+export async function getSnapshot(db: IDBDatabase, chatId: string): Promise<Snapshot | undefined> {
+  return withRemoteFallback(
+    db,
+    async () => {
+      const response = await remotePersistenceRequest('getSnapshot', { id: chatId });
+      return response?.snapshot || undefined;
+    },
+    () => getSnapshotLocal(db, chatId),
+  );
+}
+
+async function setSnapshotLocal(db: IDBDatabase, chatId: string, snapshot: Snapshot): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('snapshots', 'readwrite');
     const store = transaction.objectStore('snapshots');
@@ -348,6 +555,12 @@ export async function setSnapshot(db: IDBDatabase, chatId: string, snapshot: Sna
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+}
+
+export async function setSnapshot(db: IDBDatabase, chatId: string, snapshot: Snapshot): Promise<void> {
+  await setSnapshotLocal(db, chatId, snapshot);
+  await syncLocalToRemote(db);
+  await remotePersistenceRequest('setSnapshot', { id: chatId, snapshot });
 }
 
 export async function deleteSnapshot(db: IDBDatabase, chatId: string): Promise<void> {
