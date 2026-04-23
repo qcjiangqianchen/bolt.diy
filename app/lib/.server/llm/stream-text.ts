@@ -9,6 +9,7 @@ import { createFilesContext } from './utils';
 import { discussPrompt } from '~/lib/common/prompts/discuss-prompt';
 import type { DesignScheme } from '~/types/design-scheme';
 import { getModel } from './model-factory';
+import { SGDS_PROMPT_ADDON } from '~/lib/common/prompts/sgds';
 
 export type Messages = Message[];
 
@@ -538,6 +539,8 @@ WEBSITE HARD RULES:
 - Avoid one-row tables, three-card rosters, or single-section pages. If content is short, add relevant stats, spotlight panels, comparison cards, timeline rows, FAQ, or editorial context.
 - If the user says they do not want buttons, omit buttons and strengthen the layout with cards, stats, imagery, bands, and structured sections instead.
 - For sports or automotive subjects, prefer a dashboard/editorial layout with a bold hero, stats rail, featured event block, and dense card or table sections.
+
+${SGDS_PROMPT_ADDON}
 
 ${templateOfferBlock}
 ${templateSelectionBlock}

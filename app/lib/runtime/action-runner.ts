@@ -7,6 +7,7 @@ import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
 import { visualEditorUpdateSignalAtom } from '~/lib/stores/visualEditorStore';
+import { prepareSgdsHtmlFile } from './sgds-support';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -480,7 +481,9 @@ export class ActionRunner {
     }
 
     try {
-      await webcontainer.fs.writeFile(relativePath, action.content);
+      const content = await prepareSgdsHtmlFile(webcontainer, relativePath, action.content);
+
+      await webcontainer.fs.writeFile(relativePath, content);
       logger.debug(`File written ${relativePath}`);
 
       // Signal the GrapeJS canvas to re-read when the LLM writes HTML/CSS
