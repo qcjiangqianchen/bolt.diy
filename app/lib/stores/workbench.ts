@@ -19,6 +19,7 @@ import Cookies from 'js-cookie';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert, DeployAlert, SupabaseAlert } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
+import { getSgdsAssetFiles, hasSgdsSignal, prepareSgdsHtmlFile } from '~/lib/runtime/sgds-support';
 
 const logger = createScopedLogger('Workbench');
 const { saveAs } = fileSaver;
@@ -139,6 +140,22 @@ export class WorkbenchStore {
          */
       }
     }, 5000);
+  }
+
+  async #syncSgdsAssetFiles() {
+    const wc = await webcontainer;
+    const assets = await getSgdsAssetFiles();
+
+    for (const asset of assets) {
+      const fullPath = path.join(wc.workdir, asset.path);
+      const existing = this.#filesStore.getFile(fullPath);
+
+      if (existing?.type === 'file' && existing.content === asset.content) {
+        continue;
+      }
+
+      await this.#filesStore.createFile(fullPath, asset.content);
+    }
   }
 
   get previews() {
@@ -649,7 +666,20 @@ export class WorkbenchStore {
 
     if (data.action.type === 'file') {
       const wc = await webcontainer;
-      const fullPath = path.join(wc.workdir, data.action.filePath);
+      const preparedContent = await prepareSgdsHtmlFile(wc, data.action.filePath, data.action.content);
+      const actionData = {
+        ...data,
+        action: {
+          ...data.action,
+          content: preparedContent,
+        },
+      };
+
+      if (hasSgdsSignal(preparedContent)) {
+        await this.#syncSgdsAssetFiles();
+      }
+
+      const fullPath = path.join(wc.workdir, actionData.action.filePath);
 
       /*
        * For scoped locks, we would need to implement diff checking here
@@ -673,20 +703,20 @@ export class WorkbenchStore {
       const doc = this.#editorStore.documents.get()[fullPath];
 
       if (!doc) {
-        await artifact.runner.runAction(data, isStreaming);
+        await artifact.runner.runAction(actionData, isStreaming);
       }
 
-      this.#editorStore.updateFile(fullPath, data.action.content);
+      this.#editorStore.updateFile(fullPath, actionData.action.content);
 
-      if (!isStreaming && data.action.content) {
-        logger.info(`[_runAction] Saving file ${fullPath}, size: ${data.action.content.length} bytes`);
+      if (!isStreaming && actionData.action.content) {
+        logger.info(`[_runAction] Saving file ${fullPath}, size: ${actionData.action.content.length} bytes`);
         await this.saveFile(fullPath);
         logger.info(`[_runAction] File saved successfully: ${fullPath}`);
       }
 
       if (!isStreaming) {
         logger.info(`[_runAction] Running action in runner to write to WebContainer`);
-        await artifact.runner.runAction(data);
+        await artifact.runner.runAction(actionData);
         this.resetAllFileModifications();
         logger.info(`[_runAction] Action completed and file modifications reset`);
 

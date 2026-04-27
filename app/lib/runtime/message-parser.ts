@@ -76,6 +76,19 @@ function cleanoutMarkdownSyntax(content: string) {
 function cleanEscapedTags(content: string) {
   return content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
+
+function cleanCdataWrapper(content: string) {
+  return content.replace(/^\s*<!\[CDATA\[\s*/i, '').replace(/\s*\]\]>\s*$/i, '');
+}
+
+function cleanFileActionContent(content: string, filePath: string) {
+  if (filePath.endsWith('.md')) {
+    return content;
+  }
+
+  return cleanCdataWrapper(cleanEscapedTags(cleanoutMarkdownSyntax(content)));
+}
+
 export class StreamingMessageParser {
   #messages = new Map<string, MessageState>();
   #artifactCounter = 0;
@@ -196,10 +209,7 @@ export class StreamingMessageParser {
 
             if ('type' in currentAction && currentAction.type === 'file') {
               // Remove markdown code block syntax if present and file is not markdown
-              if (!currentAction.filePath.endsWith('.md')) {
-                content = cleanoutMarkdownSyntax(content);
-                content = cleanEscapedTags(content);
-              }
+              content = cleanFileActionContent(content, currentAction.filePath);
 
               content += '\n';
             }
@@ -226,12 +236,7 @@ export class StreamingMessageParser {
             i = closeIndex + ARTIFACT_ACTION_TAG_CLOSE.length;
           } else {
             if ('type' in currentAction && currentAction.type === 'file') {
-              let content = input.slice(i);
-
-              if (!currentAction.filePath.endsWith('.md')) {
-                content = cleanoutMarkdownSyntax(content);
-                content = cleanEscapedTags(content);
-              }
+              const content = cleanFileActionContent(input.slice(i), currentAction.filePath);
 
               this._options.callbacks?.onActionStream?.({
                 artifactId: currentArtifact.id,

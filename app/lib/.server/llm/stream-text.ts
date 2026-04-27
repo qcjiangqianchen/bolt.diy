@@ -9,6 +9,7 @@ import { createFilesContext } from './utils';
 import { discussPrompt } from '~/lib/common/prompts/discuss-prompt';
 import type { DesignScheme } from '~/types/design-scheme';
 import { getModel } from './model-factory';
+import { SGDS_PROMPT_ADDON } from '~/lib/common/prompts/sgds';
 
 export type Messages = Message[];
 
@@ -113,6 +114,12 @@ export async function streamText(props: {
     ---
     `;
 
+    const hasTrimmedMessageWindow = typeof props.messageSliceId === 'number' && props.messageSliceId > 0;
+
+    if (hasTrimmedMessageWindow) {
+      processedMessages = processedMessages.slice(props.messageSliceId);
+    }
+
     if (summary) {
       systemPrompt = `${systemPrompt}
       below is the chat history till now
@@ -121,15 +128,11 @@ export async function streamText(props: {
       ${props.summary}
       ---
       `;
+    } else if (!hasTrimmedMessageWindow) {
+      const lastMessage = processedMessages[processedMessages.length - 1];
 
-      if (props.messageSliceId) {
-        processedMessages = processedMessages.slice(props.messageSliceId);
-      } else {
-        const lastMessage = processedMessages.pop();
-
-        if (lastMessage) {
-          processedMessages = [lastMessage];
-        }
+      if (lastMessage) {
+        processedMessages = [lastMessage];
       }
     }
   }
@@ -255,6 +258,7 @@ If you encounter an issue or the user's request is unclear:
 
 IMPORTANT RULES:
 - ALWAYS, ALWAYS wrap ALL generated code inside a <boltArtifact> block. NEVER output raw markdown code blocks (like \`\`\`html) directly into the chat response under any circumstances.
+- NEVER wrap file contents in <![CDATA[ ... ]]>. Inside <boltAction type="file">, write the raw file text directly. HTML files must start with <!DOCTYPE html>, not <![CDATA[.
 - When modifying code, check CONTEXT BUFFER for current files. Only include files that need changes — do NOT recreate unchanged files.
 - You MUST create ALL files that are imported or referenced. If a file imports "./styles.css", you MUST include a boltAction to create "styles.css". Never reference a file without creating it first.
 - Always create complete, working projects with no missing files.
@@ -538,6 +542,8 @@ WEBSITE HARD RULES:
 - Avoid one-row tables, three-card rosters, or single-section pages. If content is short, add relevant stats, spotlight panels, comparison cards, timeline rows, FAQ, or editorial context.
 - If the user says they do not want buttons, omit buttons and strengthen the layout with cards, stats, imagery, bands, and structured sections instead.
 - For sports or automotive subjects, prefer a dashboard/editorial layout with a bold hero, stats rail, featured event block, and dense card or table sections.
+
+${SGDS_PROMPT_ADDON}
 
 ${templateOfferBlock}
 ${templateSelectionBlock}
