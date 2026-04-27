@@ -156,6 +156,28 @@ describe('StreamingMessageParser', () => {
     ])('should correctly parse chunks and strip out bolt artifacts (%#)', (input, expected) => {
       runTest(input, expected);
     });
+
+    it('should strip CDATA wrappers from generated file actions', () => {
+      const callbacks = {
+        onActionClose: vi.fn<ActionCallback>(),
+      };
+      const parser = new StreamingMessageParser({ callbacks });
+
+      parser.parse(
+        'message_1',
+        'Before <boltArtifact title="Site" id="artifact_1"><boltAction type="file" filePath="index.html"><![CDATA[\n<!DOCTYPE html>\n<html lang="en"></html>\n]]></boltAction></boltArtifact> After',
+      );
+
+      expect(callbacks.onActionClose).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: expect.objectContaining({
+            type: 'file',
+            filePath: 'index.html',
+            content: '<!DOCTYPE html>\n<html lang="en"></html>\n',
+          }),
+        }),
+      );
+    });
   });
 });
 

@@ -140,7 +140,7 @@ function injectBeforeClosingTag(content: string, closingTag: RegExp, injection: 
 }
 
 export function normalizeSgdsHtml(content: string) {
-  let normalized = normalizeAssetReferences(content);
+  let normalized = normalizeAssetReferences(content.replace(/^\s*<!\[CDATA\[\s*/i, '').replace(/\s*\]\]>\s*$/i, ''));
 
   if (!hasSgdsSignal(normalized)) {
     return normalized;
