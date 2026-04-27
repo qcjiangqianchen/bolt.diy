@@ -211,22 +211,19 @@ async function upsertChatWithMessages(
   const metadata = buildChatMetadata(chat.metadata, chat.id);
 
   return withPostgresTransaction(context, async (client) => {
-    const existing = await client.query<ChatRow>(
+    const existingByLocalId = await client.query<ChatRow>(
       `
         select id, project_id, user_id, url_id, description, metadata, created_at, updated_at
         from chats
         where user_id = $1
-          and (
-            url_id = $2
-            or metadata ->> $3 = $4
-          )
+          and metadata ->> $2 = $3
         limit 1
       `,
-      [userId, urlId, INTERNAL_LOCAL_CHAT_ID, chat.id],
+      [userId, INTERNAL_LOCAL_CHAT_ID, chat.id],
     );
 
-    let chatId = existing.rows[0]?.id;
-    let projectId = existing.rows[0]?.project_id;
+    let chatId = existingByLocalId.rows[0]?.id;
+    let projectId = existingByLocalId.rows[0]?.project_id;
 
     if (!chatId || !projectId) {
       const projectResult = await client.query<{ id: string }>(
@@ -239,11 +236,16 @@ async function upsertChatWithMessages(
       );
       projectId = projectResult.rows[0].id;
 
-      const chatResult = await client.query<{ id: string }>(
+      const chatResult = await client.query<{ id: string; project_id: string }>(
         `
           insert into chats (project_id, user_id, title, description, url_id, metadata, created_at, updated_at)
           values ($1, $2, $3, $4, $5, $6::jsonb, $7, $7)
-          returning id
+          on conflict (user_id, url_id) do update
+            set title = coalesce(excluded.title, chats.title),
+                description = excluded.description,
+                metadata = excluded.metadata,
+                updated_at = now()
+          returning id, project_id
         `,
         [
           projectId,
@@ -257,7 +259,18 @@ async function upsertChatWithMessages(
       );
       chatId = chatResult.rows[0].id;
 
-      await client.query('update projects set current_chat_id = $1 where id = $2', [chatId, projectId]);
+      const resolvedProjectId = chatResult.rows[0].project_id;
+
+      if (resolvedProjectId !== projectId) {
+        await client.query('delete from projects where id = $1 and user_id = $2', [projectId, userId]);
+        projectId = resolvedProjectId;
+      }
+
+      await client.query('update projects set current_chat_id = $1 where id = $2 and user_id = $3', [
+        chatId,
+        projectId,
+        userId,
+      ]);
     } else {
       await client.query(
         `
