@@ -885,36 +885,18 @@ function parseHtmlDocument(html: string): {
   scriptUrls: string[];
   bodyClass: string;
 } {
-  // Extract all <style> content
-  const styleMatches = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)];
-  const cssContent = styleMatches.map((m) => m[1]).join('\n');
+  const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  // Extract relevant <script src="..."> URLs
-  const scriptMatches = [...html.matchAll(/<script[^>]+src=["']([^"']+)["'][^>]*>[\s\S]*?<\/script>/gi)];
-  const scriptUrls = scriptMatches.map((m) => m[1]);
+  const cssContent = Array.from(doc.querySelectorAll('style'))
+    .map((styleEl) => styleEl.textContent || '')
+    .join('\n');
 
-  const filteredScriptUrls = scriptUrls.filter(
-    (url) => !url.includes('tailwindcss.com') && !url.includes('cdn.tailwindcss.com'),
-  );
+  const filteredScriptUrls = Array.from(doc.querySelectorAll('script[src]'))
+    .map((scriptEl) => scriptEl.getAttribute('src') || '')
+    .filter((url) => url && !url.includes('tailwindcss.com') && !url.includes('cdn.tailwindcss.com'));
 
-  // Extract <body> class and inner HTML
-  const bodyMatch = html.match(/<body([^>]*)>([\s\S]*)<\/body>/i);
-  let bodyHtml = '';
-  let bodyClass = '';
-
-  if (bodyMatch) {
-    const bodyAttr = bodyMatch[1] || '';
-    bodyHtml = bodyMatch[2].trim();
-
-    const classMatch = bodyAttr.match(/class\s*=\s*["']([^"']+)["']/i);
-    bodyClass = classMatch ? classMatch[1] : '';
-  } else {
-    // If no body tag, use the whole HTML but strip <head>
-    bodyHtml = html
-      .replace(/<head>[\s\S]*?<\/head>/gi, '')
-      .replace(/<html[^>]*>|<\/html>|<body[^>]*>|<\/body>/gi, '')
-      .trim();
-  }
+  const bodyHtml = doc.body?.innerHTML.trim() || '';
+  const bodyClass = doc.body?.className || '';
 
   return { bodyHtml, cssContent, scriptUrls: filteredScriptUrls, bodyClass };
 }
@@ -925,32 +907,26 @@ function parseHtmlDocument(html: string): {
  * the <body> content + <style> block.
  */
 function buildHtmlDocument(originalHtml: string, newBodyHtml: string, newCss: string): string {
-  // Strip old body content
-  let result = originalHtml;
+  const originalDoc = new DOMParser().parseFromString(originalHtml, 'text/html');
+  const nextBodyDoc = new DOMParser().parseFromString(newBodyHtml, 'text/html');
 
-  // Replace or inject <style> in <head>
-  if (/<style[^>]*>/i.test(result)) {
-    result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  const doc = originalDoc;
+  const head = doc.head || doc.documentElement.appendChild(doc.createElement('head'));
+  const body = doc.body || doc.documentElement.appendChild(doc.createElement('body'));
+
+  for (const styleEl of Array.from(head.querySelectorAll('style'))) {
+    styleEl.remove();
   }
 
-  const styleBlock = newCss ? `\n<style>\n${newCss}\n</style>` : '';
-
-  if (/<\/head>/i.test(result)) {
-    result = result.replace('</head>', `${styleBlock}\n</head>`);
-  } else if (/<head>/i.test(result)) {
-    result = result.replace('</head>', `${styleBlock}\n</head>`);
+  if (newCss.trim()) {
+    const styleEl = doc.createElement('style');
+    styleEl.textContent = `\n${newCss}\n`;
+    head.appendChild(styleEl);
   }
 
-  // Replace <body> content
-  if (/<body[^>]*>/i.test(result)) {
-    // Preserve the body attributes if any
-    result = result.replace(/<body([^>]*)>[\s\S]*?<\/body>/i, `<body$1>\n${newBodyHtml}\n</body>`);
-  } else {
-    // Fallback if no body tag found, though unlikely for valid HTML
-    result = `${result}\n<body>\n${newBodyHtml}\n</body>`;
-  }
+  body.innerHTML = nextBodyDoc.body?.innerHTML || newBodyHtml;
 
-  return result;
+  return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
 }
 
 // ── Component ────────────────────────────────────────────────────────────

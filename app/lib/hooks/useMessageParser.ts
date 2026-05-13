@@ -20,6 +20,11 @@ const messageParser = new EnhancedStreamingMessageParser({
       workbenchStore.updateArtifact(data, { closed: true });
     },
     onActionOpen: (data) => {
+      if (workbenchStore.isReloadedMessage(data.messageId)) {
+        logger.debug('[onActionOpen] Skipping restored action:', data.actionId);
+        return;
+      }
+
       logger.info(
         '[onActionOpen] Action opened:',
         data.actionId,
@@ -41,6 +46,11 @@ const messageParser = new EnhancedStreamingMessageParser({
       }
     },
     onActionClose: (data) => {
+      if (workbenchStore.isReloadedMessage(data.messageId)) {
+        logger.debug('[onActionClose] Skipping restored action:', data.actionId);
+        return;
+      }
+
       logger.info('[onActionClose] Action closed:', data.actionId, 'type:', data.action.type);
 
       /*
@@ -55,6 +65,11 @@ const messageParser = new EnhancedStreamingMessageParser({
       workbenchStore.runAction(data);
     },
     onActionStream: (data) => {
+      if (workbenchStore.isReloadedMessage(data.messageId)) {
+        logger.debug('[onActionStream] Skipping restored action stream:', data.actionId);
+        return;
+      }
+
       logger.trace('onActionStream', data.action);
       workbenchStore.runAction(data, true);
     },

@@ -96,6 +96,11 @@ function buildChatMetadata(metadata: IChatMetadata | undefined, localChatId: str
   };
 }
 
+function getStoredLocalChatId(chat: Pick<ChatRow, 'metadata' | 'url_id'>): string {
+  const localChatId = chat.metadata?.[INTERNAL_LOCAL_CHAT_ID];
+  return typeof localChatId === 'string' && localChatId.trim().length > 0 ? localChatId : chat.url_id;
+}
+
 async function requireDbUser({ request, context }: ActionFunctionArgs | LoaderFunctionArgs): Promise<AppUserRow> {
   const authenticatedUser = await requireAuthenticatedUser(request, context);
 
@@ -191,7 +196,7 @@ async function getMessagesForChat(
   });
 
   return {
-    id: chat.url_id,
+    id: getStoredLocalChatId(chat),
     urlId: chat.url_id,
     description: chat.description || undefined,
     messages,
@@ -330,7 +335,10 @@ async function upsertChatWithMessages(
 
     return {
       ...chat,
-      id: urlId,
+      id: getStoredLocalChatId({
+        metadata,
+        url_id: urlId,
+      }),
       urlId,
       timestamp,
     };
@@ -350,7 +358,7 @@ async function getAllChats(context: ActionFunctionArgs['context'], userId: strin
   );
 
   return result.rows.map((chat) => ({
-    id: chat.url_id,
+    id: getStoredLocalChatId(chat),
     urlId: chat.url_id,
     description: chat.description || undefined,
     messages: [],
