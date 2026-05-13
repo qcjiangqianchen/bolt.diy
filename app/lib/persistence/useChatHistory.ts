@@ -1,7 +1,7 @@
 import { useLoaderData, useNavigate, useSearchParams } from '@remix-run/react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { atom } from 'nanostores';
-import { generateId, type JSONValue, type Message } from 'ai';
+import { type JSONValue, type Message } from 'ai';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
@@ -20,8 +20,7 @@ import {
 import type { FileMap } from '~/lib/stores/files';
 import type { Snapshot } from './types';
 import { webcontainer } from '~/lib/webcontainer';
-import { detectProjectCommands, createCommandActionsString } from '~/utils/projectCommands';
-import type { ContextAnnotation } from '~/types/context';
+import { detectProjectCommands } from '~/utils/projectCommands';
 
 export interface ChatHistoryItem {
   id: string;
@@ -43,6 +42,7 @@ export function useChatHistory() {
   const navigate = useNavigate();
   const { id: mixedId } = useLoaderData<{ id?: string }>();
   const [searchParams] = useSearchParams();
+  const restoreBootstrapRef = useRef<string | undefined>(undefined);
 
   const [archivedMessages, setArchivedMessages] = useState<Message[]>([]);
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
@@ -74,111 +74,25 @@ export function useChatHistory() {
              * const snapshot: Snapshot = snapshotStr ? JSON.parse(snapshotStr) : { chatIndex: 0, files: {} }; // Use snapshot from DB
              */
             const validSnapshot = snapshot || { chatIndex: '', files: {} }; // Ensure snapshot is not undefined
-            const summary = validSnapshot.summary;
 
             const rewindId = searchParams.get('rewindTo');
-            let startingIdx = -1;
             const endingIdx = rewindId
               ? storedMessages.messages.findIndex((m) => m.id === rewindId) + 1
               : storedMessages.messages.length;
-            const snapshotIndex = storedMessages.messages.findIndex((m) => m.id === validSnapshot.chatIndex);
+            const filteredMessages = storedMessages.messages.slice(0, endingIdx);
 
-            if (snapshotIndex >= 0 && snapshotIndex < endingIdx) {
-              startingIdx = snapshotIndex;
-            }
-
-            if (snapshotIndex > 0 && storedMessages.messages[snapshotIndex].id == rewindId) {
-              startingIdx = -1;
-            }
-
-            let filteredMessages = storedMessages.messages.slice(startingIdx + 1, endingIdx);
-            let archivedMessages: Message[] = [];
-
-            if (startingIdx >= 0) {
-              archivedMessages = storedMessages.messages.slice(0, startingIdx + 1);
-            }
-
-            setArchivedMessages(archivedMessages);
-
-            if (startingIdx > 0) {
-              const files = Object.entries(validSnapshot?.files || {})
-                .map(([key, value]) => {
-                  if (value?.type !== 'file') {
-                    return null;
-                  }
-
-                  return {
-                    content: value.content,
-                    path: key,
-                  };
-                })
-                .filter((x): x is { content: string; path: string } => !!x); // Type assertion
-              const projectCommands = await detectProjectCommands(files);
-
-              // Call the modified function to get only the command actions string
-              const commandActionsString = createCommandActionsString(projectCommands);
-
-              filteredMessages = [
-                {
-                  id: generateId(),
-                  role: 'user',
-                  content: `Restore project from snapshot`, // Removed newline
-                  annotations: ['no-store', 'hidden'],
-                },
-                {
-                  id: storedMessages.messages[snapshotIndex].id,
-                  role: 'assistant',
-
-                  // Combine followup message and the artifact with files and command actions
-                  content: `Bolt Restored your chat from a snapshot. You can revert this message to load the full chat history.
-                  <boltArtifact id="restored-project-setup" title="Restored Project & Setup" type="bundled">
-                  ${Object.entries(snapshot?.files || {})
-                    .map(([key, value]) => {
-                      if (value?.type === 'file') {
-                        return `
-                      <boltAction type="file" filePath="${key}">
-${value.content}
-                      </boltAction>
-                      `;
-                      } else {
-                        return ``;
-                      }
-                    })
-                    .join('\n')}
-                  ${commandActionsString} 
-                  </boltArtifact>
-                  `, // Added commandActionsString, followupMessage, updated id and title
-                  annotations: [
-                    'no-store',
-                    ...(summary
-                      ? [
-                          {
-                            chatId: storedMessages.messages[snapshotIndex].id,
-                            type: 'chatSummary',
-                            summary,
-                          } satisfies ContextAnnotation,
-                        ]
-                      : []),
-                  ],
-                },
-
-                // Remove the separate user and assistant messages for commands
-                /*
-                 *...(commands !== null // This block is no longer needed
-                 *  ? [ ... ]
-                 *  : []),
-                 */
-                ...filteredMessages,
-              ];
-              restoreSnapshot(mixedId);
-            }
-
+            setArchivedMessages([]);
             setInitialMessages(filteredMessages);
 
             setUrlId(storedMessages.urlId);
             description.set(storedMessages.description);
             chatId.set(storedMessages.id);
             chatMetadata.set(storedMessages.metadata);
+
+            if (Object.keys(validSnapshot.files || {}).length > 0) {
+              await restoreSnapshot(validSnapshot);
+              await bootstrapProjectFromSnapshot(storedMessages.urlId || mixedId || storedMessages.id, validSnapshot);
+            }
           } else {
             navigate('/', { replace: true });
           }
@@ -222,8 +136,7 @@ ${value.content}
     [db],
   );
 
-  const restoreSnapshot = useCallback(async (id: string, snapshot?: Snapshot) => {
-    // const snapshotStr = localStorage.getItem(`snapshot:${id}`); // Remove localStorage usage
+  const restoreSnapshot = useCallback(async (snapshot?: Snapshot) => {
     const container = await webcontainer;
 
     const validSnapshot = snapshot || { chatIndex: '', files: {} };
@@ -232,7 +145,9 @@ ${value.content}
       return;
     }
 
-    Object.entries(validSnapshot.files).forEach(async ([key, value]) => {
+    for (const [originalKey, value] of Object.entries(validSnapshot.files)) {
+      let key = originalKey;
+
       if (key.startsWith(container.workdir)) {
         key = key.replace(container.workdir, '');
       }
@@ -240,19 +155,78 @@ ${value.content}
       if (value?.type === 'folder') {
         await container.fs.mkdir(key, { recursive: true });
       }
-    });
-    Object.entries(validSnapshot.files).forEach(async ([key, value]) => {
+    }
+
+    for (const [originalKey, value] of Object.entries(validSnapshot.files)) {
+      let key = originalKey;
+
       if (value?.type === 'file') {
         if (key.startsWith(container.workdir)) {
           key = key.replace(container.workdir, '');
         }
 
         await container.fs.writeFile(key, value.content, { encoding: value.isBinary ? undefined : 'utf8' });
-      } else {
       }
+    }
+
+    workbenchStore.previewsStore.refreshAllPreviews();
+  }, []);
+
+  const bootstrapProjectFromSnapshot = useCallback(async (snapshotKey: string, snapshot?: Snapshot) => {
+    if (!snapshot || restoreBootstrapRef.current === snapshotKey) {
+      return;
+    }
+
+    const files = Object.entries(snapshot.files || {})
+      .map(([path, value]) => {
+        if (value?.type !== 'file') {
+          return null;
+        }
+
+        return {
+          path,
+          content: value.content,
+        };
+      })
+      .filter((value): value is { path: string; content: string } => Boolean(value));
+
+    if (files.length === 0) {
+      return;
+    }
+
+    const projectCommands = await detectProjectCommands(files);
+
+    if (!projectCommands.startCommand) {
+      return;
+    }
+
+    restoreBootstrapRef.current = snapshotKey;
+
+    const artifactId = `snapshot-restore-${snapshotKey}`;
+    const messageId = `snapshot-restore-${snapshotKey}`;
+    const actionId = `${artifactId}:start`;
+
+    workbenchStore.showWorkbench.set(true);
+    workbenchStore.addArtifact({
+      messageId,
+      artifactId,
+      id: artifactId,
+      title: 'Restored Project',
+      type: 'bundled',
     });
 
-    // workbenchStore.files.setKey(snapshot?.files)
+    const actionData = {
+      artifactId,
+      messageId,
+      actionId,
+      action: {
+        type: 'start',
+        content: projectCommands.startCommand,
+      },
+    } as const;
+
+    workbenchStore.addAction(actionData);
+    workbenchStore.runAction(actionData);
   }, []);
 
   return {
